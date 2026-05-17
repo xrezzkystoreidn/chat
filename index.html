@@ -852,9 +852,12 @@ async function toggleFollow(targetId,targetUsername,targetEmail){
     delete followMap[targetId];
     showToast(`Berhenti follow @${targetUsername}`);
   } else {
-    await sb.from('follows').upsert({sender_id:ME.id,receiver_id:targetId,status:'accepted'},{onConflict:'sender_id,receiver_id'});
+    await sb.from('follows').upsert(
+      {sender_id:ME.id, receiver_id:targetId, status:'accepted'},
+      {onConflict:'sender_id,receiver_id'}
+    );
     followMap[targetId]='accepted';
-    await ensureConversation(targetId,targetUsername,targetEmail);
+    await ensureConversation(targetId, targetUsername, targetEmail);
     showToast(`Kamu follow @${targetUsername}! 🎉`);
     await loadConvos();
   }
@@ -862,22 +865,32 @@ async function toggleFollow(targetId,targetUsername,targetEmail){
 }
 
 async function ensureConversation(partnerId, partnerUsername, partnerEmail){
-  // Row milik kita — pasti boleh insert (RLS: owner_id = auth.uid())
-  const {error:e1} = await sb.from('conversations').upsert(
-    {owner_id:ME.id, partner_id:partnerId, updated_at:new Date().toISOString()},
-    {onConflict:'owner_id,partner_id', ignoreDuplicates:false}
-  );
-  if(e1) console.warn('ensureConvo side-A:', e1.message);
+  // PENTING: gunakan 1 conversation ID yang sama untuk kedua pihak
+  // Caranya: selalu sort dua UUID, yang lebih kecil jadi "owner" canonical
+  // Ini memastikan A→B dan B→A selalu dapat row yang sama
+  const [uid1, uid2] = [ME.id, partnerId].sort();
 
-  // Row mirror (sisi partner) — mungkin RLS reject kalau partner belum login
-  // Pakai upsert + ignoreDuplicates agar ga error kalau sudah ada
-  const {error:e2} = await sb.from('conversations').upsert(
-    {owner_id:partnerId, partner_id:ME.id, updated_at:new Date().toISOString()},
-    {onConflict:'owner_id,partner_id', ignoreDuplicates:true}
-  );
-  // e2 mungkin gagal karena RLS — itu OK, partner akan lihat convo dari sisi mereka
-  // waktu mereka login dan follow balik
-  if(e2) console.info('ensureConvo side-B (expected if partner not logged in):', e2.message);
+  const {data, error} = await sb.from('conversations').upsert(
+    {owner_id: uid1, partner_id: uid2, updated_at: new Date().toISOString()},
+    {onConflict: 'owner_id,partner_id', ignoreDuplicates: false}
+  ).select('id').single();
+
+  if (error) {
+    console.error('ensureConversation error:', error.message);
+    return null;
+  }
+  return data?.id || null;
+}
+
+// Dapatkan conversation ID yang shared antara dua user
+async function getSharedConvoId(partnerId){
+  const [uid1, uid2] = [ME.id, partnerId].sort();
+  const {data} = await sb.from('conversations')
+    .select('id')
+    .eq('owner_id', uid1)
+    .eq('partner_id', uid2)
+    .single();
+  return data?.id || null;
 }
 
 // ════════════════════════════════
@@ -929,53 +942,131 @@ function filterPeople(v){
 
 async function quickOpenChat(partnerId,partnerUsername,partnerEmail){
   switchSidebarTab('messages');
-  let convo=null;
-  const {data}=await sb.from('conversations').select('id').eq('owner_id',ME.id).eq('partner_id',partnerId).single();
-  convo=data;
-  if(!convo){ await ensureConversation(partnerId,partnerUsername,partnerEmail); await loadConvos(); const {data:d2}=await sb.from('conversations').select('id').eq('owner_id',ME.id).eq('partner_id',partnerId).single(); convo=d2; }
-  if(convo) await openConvo(convo.id,partnerId,partnerUsername,partnerEmail);
+  // Selalu cari shared convo (canonical sort)
+  let convoId = await getSharedConvoId(partnerId);
+  if(!convoId){
+    convoId = await ensureConversation(partnerId, partnerUsername, partnerEmail);
+    await loadConvos();
+  }
+  if(convoId) await openConvo(convoId, partnerId, partnerUsername, partnerEmail);
+  else showToast('Gagal membuka chat. Coba lagi.');
 }
 
 // ════════════════════════════════
 //  CONVERSATIONS
 // ════════════════════════════════
 async function loadConvos(){
-  const {data}=await sb.from('conversations').select('*, partner:partner_id(*)').eq('owner_id',ME.id).order('updated_at',{ascending:false});
-  convos=data||[]; await renderConvoList(convos);
+  // Dengan model shared conversation, user bisa jadi owner atau partner
+  // Ambil semua conversation dimana ME terlibat
+  const {data:asOwner} = await sb.from('conversations')
+    .select('*, partner:partner_id(*)')
+    .eq('owner_id', ME.id)
+    .order('updated_at', {ascending:false});
+
+  const {data:asPartner} = await sb.from('conversations')
+    .select('id, owner_id, partner_id, updated_at, partner:owner_id(*)')
+    .eq('partner_id', ME.id)
+    .order('updated_at', {ascending:false});
+
+  // Merge + deduplicate by id
+  const all = [...(asOwner||[]), ...(asPartner||[])];
+  const seen = new Set();
+  convos = all.filter(c => {
+    if(seen.has(c.id)) return false;
+    seen.add(c.id);
+    return true;
+  }).sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+  await renderConvoList(convos);
 }
 
 async function renderConvoList(list){
   const el=document.getElementById('convo-list');
   if(!list.length){ el.innerHTML=`<div class="convo-empty"><i class="fa fa-comments"></i><p>Belum ada percakapan</p><small>Follow seseorang di 🌐 Temukan</small></div>`; return; }
-  const convoIds=list.map(c=>c.id), partnerIds=list.map(c=>c.partner_id).filter(Boolean);
-  const {data:recentMsgs}=await sb.from('messages').select('conversation_id,text,sender_id,created_at,is_read,media_url,media_type').in('conversation_id',convoIds).order('created_at',{ascending:false});
-  const lastMsgMap={};
-  if(recentMsgs) for(const m of recentMsgs){ if(!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id]=m; }
-  const {data:unreadMsgs}=await sb.from('messages').select('conversation_id').in('conversation_id',convoIds).eq('is_read',false).neq('sender_id',ME.id);
-  const unreadMap={};
-  if(unreadMsgs) for(const m of unreadMsgs){ unreadMap[m.conversation_id]=(unreadMap[m.conversation_id]||0)+1; }
-  const {data:presList}=partnerIds.length?await sb.from('user_presence').select('user_id,is_online').in('user_id',partnerIds):{data:[]};
-  const presMap={};
+
+  const convoIds = list.map(c=>c.id);
+
+  // Batch: last message per convo
+  const {data:recentMsgs} = await sb.from('messages')
+    .select('conversation_id,text,sender_id,created_at,is_read,media_url,media_type')
+    .in('conversation_id', convoIds)
+    .order('created_at', {ascending:false});
+  const lastMsgMap = {};
+  if(recentMsgs) for(const m of recentMsgs){
+    if(!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id]=m;
+  }
+
+  // Batch: unread
+  const {data:unreadMsgs} = await sb.from('messages')
+    .select('conversation_id')
+    .in('conversation_id', convoIds)
+    .eq('is_read', false)
+    .neq('sender_id', ME.id);
+  const unreadMap = {};
+  if(unreadMsgs) for(const m of unreadMsgs){
+    unreadMap[m.conversation_id] = (unreadMap[m.conversation_id]||0)+1;
+  }
+
+  // Batch: presence — kumpulkan semua partner IDs
+  const partnerIds = list.map(c => c.owner_id === ME.id ? c.partner_id : c.owner_id).filter(Boolean);
+  const {data:presList} = partnerIds.length
+    ? await sb.from('user_presence').select('user_id,is_online').in('user_id', partnerIds)
+    : {data:[]};
+  const presMap = {};
   if(presList) presList.forEach(p=>{ presMap[p.user_id]=p.is_online; });
-  let html='';
+
+  let html = '';
   for(const c of list){
-    const p=c.partner; if(!p) continue;
-    const last=lastMsgMap[c.id], u=unreadMap[c.id]||0, isOnline=presMap[p.id]||false;
-    let lastText=last?(last.media_url?(last.sender_id===ME.id?'✓ ':'')+( last.media_type==='video'?'🎥 Video':'🖼️ Foto'):(last.sender_id===ME.id?'✓ ':'')+truncate(last.text||'',34)):'Mulai percakapan...';
-    html+=`<div class="convo-item${activeConvoId===c.id?' active':''}" onclick="openConvo('${c.id}','${p.id}','${esc(p.username)}','${esc(p.email)}')" data-name="${(p.username||'').toLowerCase()}">
-      <div class="convo-avatar"><img src="${avatarUrl(p.username)}">${isOnline?`<div class="online-ring"></div>`:''}</div>
+    // Partner = siapapun yang bukan ME
+    const partner = c.owner_id === ME.id ? c.partner : c.partner;
+    // Fallback kalau join ga ada
+    if(!partner) continue;
+
+    const partnerId = c.owner_id === ME.id ? c.partner_id : c.owner_id;
+    const last = lastMsgMap[c.id];
+    const u = unreadMap[c.id]||0;
+    const isOnline = presMap[partnerId]||false;
+
+    let lastText = last
+      ? (last.media_url
+          ? (last.sender_id===ME.id?'✓ ':'')+(last.media_type==='video'?'🎥 Video':'🖼️ Foto')
+          : (last.sender_id===ME.id?'✓ ':'')+truncate(last.text||'',34))
+      : 'Mulai percakapan...';
+
+    html += `<div class="convo-item${activeConvoId===c.id?' active':''}"
+      onclick="openConvo('${c.id}','${partnerId}','${esc(partner.username)}','${esc(partner.email)}')"
+      data-name="${(partner.username||'').toLowerCase()}">
+      <div class="convo-avatar">
+        <img src="${avatarUrl(partner.username)}">
+        ${isOnline?`<div class="online-ring"></div>`:''}
+      </div>
       <div class="convo-info">
-        <div class="convo-top"><span class="convo-name">${esc(p.username)}</span><span class="convo-time">${last?fmtTime(last.created_at):''}</span></div>
-        <div class="convo-bot"><span class="convo-last">${esc(lastText)}</span>${u>0?`<span class="unread-pill">${u>99?'99+':u}</span>`:''}</div>
+        <div class="convo-top">
+          <span class="convo-name">${esc(partner.username)}</span>
+          <span class="convo-time">${last?fmtTime(last.created_at):''}</span>
+        </div>
+        <div class="convo-bot">
+          <span class="convo-last">${esc(lastText)}</span>
+          ${u>0?`<span class="unread-pill">${u>99?'99+':u}</span>`:''}
+        </div>
       </div>
     </div>`;
   }
-  el.innerHTML=html;
+  el.innerHTML = html;
 }
 
 function subscribeConvos(){
   if(convoCh) sb.removeChannel(convoCh);
-  convoCh=sb.channel('my-convos-'+ME.id).on('postgres_changes',{event:'*',schema:'public',table:'conversations',filter:`owner_id=eq.${ME.id}`},()=>loadConvos()).subscribe();
+  // Listen ke conversation dimana ME adalah owner ATAU partner
+  convoCh = sb.channel('my-convos-'+ME.id)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},
+      (payload) => {
+        const c = payload.new || payload.old;
+        if(c?.owner_id === ME.id || c?.partner_id === ME.id){
+          loadConvos();
+        }
+      }
+    ).subscribe();
 }
 function filterConvos(v){ document.querySelectorAll('.convo-item').forEach(el=>{ el.style.display=el.dataset.name?.includes(v.toLowerCase())?'':'none'; }); }
 
@@ -1397,10 +1488,17 @@ async function searchUser(q){
 }
 async function startChat(partnerId,partnerUsername,partnerEmail){
   closeNewChat();
-  if(!followMap[partnerId]){ await sb.from('follows').upsert({sender_id:ME.id,receiver_id:partnerId,status:'accepted'},{onConflict:'sender_id,receiver_id'}); followMap[partnerId]='accepted'; }
-  await ensureConversation(partnerId,partnerUsername,partnerEmail); await loadConvos();
-  const {data:convo}=await sb.from('conversations').select('id').eq('owner_id',ME.id).eq('partner_id',partnerId).single();
-  if(convo) await openConvo(convo.id,partnerId,partnerUsername,partnerEmail);
+  if(!followMap[partnerId]){
+    await sb.from('follows').upsert(
+      {sender_id:ME.id, receiver_id:partnerId, status:'accepted'},
+      {onConflict:'sender_id,receiver_id'}
+    );
+    followMap[partnerId]='accepted';
+  }
+  const convoId = await ensureConversation(partnerId, partnerUsername, partnerEmail);
+  await loadConvos();
+  if(convoId) await openConvo(convoId, partnerId, partnerUsername, partnerEmail);
+  else showToast('Gagal membuka chat.');
 }
 
 // ════════════════════════════════
