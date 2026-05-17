@@ -521,16 +521,18 @@ const sb = createClient(
 const CLOUD = 'dknodp2zg', PRESET = 'chat_Unsigned';
 const MAX_IMG = 5*1024*1024, MAX_VID = 10*1024*1024;
 
-// ── Restore session dari localStorage saat load ──
-(async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) {
-    // Tidak ada session → langsung ke auth screen
+// ── Session init: SATU sumber kebenaran = onAuthStateChange ──
+// Jangan campurkan getSession() manual dgn onAuthStateChange,
+// itu penyebab crash / double init
+let _authReady = false;
+
+// Timeout fallback: kalau 8 detik ga ada event, paksa ke auth screen
+const _authTimeout = setTimeout(() => {
+  if (!_authReady) {
+    console.warn('Auth timeout — force show login');
     showScreen('screen-auth');
   }
-  // Kalau ada session, onAuthStateChange akan trigger SIGNED_IN
-  // dan handle ke screen-app otomatis
-})();
+}, 8000);
 
 // ════════════════════════════════
 //  STATE
@@ -614,19 +616,41 @@ async function doLogout(){
   cleanupChannels(); showScreen('screen-auth');
 }
 
-sb.auth.onAuthStateChange(async(event,session)=>{
-  if(event==='PASSWORD_RECOVERY'){
+sb.auth.onAuthStateChange(async(event, session) => {
+  // Tandai auth sudah ready, batalkan timeout fallback
+  _authReady = true;
+  clearTimeout(_authTimeout);
+
+  console.log('[auth]', event, session?.user?.email || 'no user');
+
+  if (event === 'PASSWORD_RECOVERY') {
     showScreen('screen-reset-password');
     return;
   }
-  if(session?.user){
-    ME=session.user;
-    await loadMyProfile();
-    showScreen('screen-app');
-    if(!window._appInited){ window._appInited=true; initApp(); }
-  } else {
-    window._appInited=false;
+
+  if (event === 'SIGNED_OUT' || (!session && event !== 'PASSWORD_RECOVERY')) {
+    window._appInited = false;
+    ME = null; MY_PROFILE = null;
     showScreen('screen-auth');
+    return;
+  }
+
+  if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+    // Cegah double init — kalau sudah init dan user sama, skip
+    if (window._appInited && ME?.id === session.user.id) return;
+
+    ME = session.user;
+    try {
+      await loadMyProfile();
+    } catch(e) {
+      console.error('loadMyProfile error:', e);
+    }
+    showScreen('screen-app');
+
+    if (!window._appInited) {
+      window._appInited = true;
+      initApp();
+    }
   }
 });
 
@@ -971,44 +995,198 @@ async function sendMsg(){
 //  MEDIA UPLOAD
 // ════════════════════════════════
 function handleFileSelect(e){
-  Array.from(e.target.files).forEach(file=>{
-    const isVid=file.type.startsWith('video/'), isImg=file.type.startsWith('image/');
-    if(!isVid&&!isImg){ showToast(`Tidak didukung: ${file.name}`); return; }
-    if(file.size>(isVid?MAX_VID:MAX_IMG)){ showToast(`${file.name} terlalu besar! Max ${isVid?'10MB':'5MB'}`); return; }
-    pendingFiles.push({file,previewUrl:URL.createObjectURL(file),type:isVid?'video':'image'});
-  });
-  e.target.value=''; renderMediaPreview();
+  const files = Array.from(e.target.files || []);
+  e.target.value = ''; // reset input supaya bisa pilih file yang sama lagi
+
+  let blocked = [];
+
+  for(const file of files){
+    const isVid = file.type.startsWith('video/');
+    const isImg = file.type.startsWith('image/');
+
+    // Reject non-media
+    if(!isVid && !isImg){
+      showToast(`❌ Format tidak didukung: ${file.name}`);
+      continue;
+    }
+
+    // HARD BLOCK size — tutup file kalau kegedean
+    const maxSize = isVid ? MAX_VID : MAX_IMG;
+    if(file.size > maxSize){
+      blocked.push({ name: file.name, size: fmtBytes(file.size), max: isVid ? '10MB' : '5MB' });
+      continue;
+    }
+
+    // Aman — tambah ke queue
+    const previewUrl = URL.createObjectURL(file);
+    pendingFiles.push({ file, previewUrl, type: isVid ? 'video' : 'image', name: file.name });
+  }
+
+  // Tampilkan pesan blocked jelas
+  if(blocked.length > 0){
+    const detail = blocked.map(b => `• ${b.name} (${b.size}, max ${b.max})`).join('\n');
+    showBlockedAlert(`File berikut DITOLAK karena melebihi batas:\n\n${detail}\n\nFoto max 5MB, Video max 10MB.`);
+  }
+
+  renderMediaPreview();
 }
+
+function showBlockedAlert(msg){
+  // Hapus alert lama kalau ada
+  document.getElementById('upload-blocked-alert')?.remove();
+  const el = document.createElement('div');
+  el.id = 'upload-blocked-alert';
+  el.style.cssText = `
+    position:fixed;top:0;left:50%;transform:translateX(-50%);
+    max-width:360px;width:calc(100% - 32px);
+    background:#1a0a0a;border:1.5px solid #ef4444;color:#fca5a5;
+    border-radius:0 0 16px 16px;padding:14px 16px;font-size:12px;
+    line-height:1.7;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.7);
+    font-family:inherit;white-space:pre-line;
+  `;
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+    <div><b style="color:#ef4444;font-size:13px;">⛔ File Ditolak</b><br>${msg.replace(/\n/g,'<br>')}</div>
+    <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#fca5a5;font-size:18px;cursor:pointer;flex-shrink:0;line-height:1;">×</button>
+  </div>`;
+  document.body.appendChild(el);
+  // Auto hilang 6 detik
+  setTimeout(() => el.remove(), 6000);
+}
+
+function fmtBytes(b){
+  if(b < 1024*1024) return (b/1024).toFixed(0)+'KB';
+  return (b/(1024*1024)).toFixed(1)+'MB';
+}
+
 function renderMediaPreview(){
-  const s=document.getElementById('media-preview-strip');
+  const s = document.getElementById('media-preview-strip');
   if(!pendingFiles.length){ s.classList.remove('visible'); s.innerHTML=''; return; }
   s.classList.add('visible');
-  s.innerHTML=pendingFiles.map((f,i)=>`<div class="media-thumb">${f.type==='video'?`<video src="${f.previewUrl}" muted></video>`:`<img src="${f.previewUrl}">`}<button class="media-thumb-rm" onclick="removePendingFile(${i})">✕</button><span class="media-thumb-type">${f.type==='video'?'VID':'IMG'}</span></div>`).join('');
+  s.innerHTML = pendingFiles.map((f,i) => `
+    <div class="media-thumb">
+      ${f.type==='video'
+        ? `<video src="${f.previewUrl}" muted preload="metadata" style="pointer-events:none;"></video>`
+        : `<img src="${f.previewUrl}" alt="">`
+      }
+      <button class="media-thumb-rm" onclick="removePendingFile(${i})">✕</button>
+      <span class="media-thumb-type">${f.type==='video'?'VID':'IMG'}</span>
+    </div>`).join('');
 }
-function removePendingFile(i){ URL.revokeObjectURL(pendingFiles[i].previewUrl); pendingFiles.splice(i,1); renderMediaPreview(); }
-async function uploadToCloudinary(file,type){
-  const fd=new FormData(); fd.append('file',file); fd.append('upload_preset',PRESET);
-  const rt=type==='video'?'video':'image';
-  const res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/${rt}/upload`,{method:'POST',body:fd});
-  if(!res.ok) throw new Error('Upload gagal');
-  return (await res.json()).secure_url;
+
+function removePendingFile(i){
+  URL.revokeObjectURL(pendingFiles[i].previewUrl);
+  pendingFiles.splice(i, 1);
+  renderMediaPreview();
 }
+
+async function uploadToCloudinary(file, type, onProgress){
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', PRESET);
+
+    const xhr = new XMLHttpRequest();
+    const rt = type === 'video' ? 'video' : 'image';
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUD}/${rt}/upload`);
+
+    // Progress
+    xhr.upload.onprogress = e => {
+      if(e.lengthComputable && onProgress){
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if(xhr.status >= 200 && xhr.status < 300){
+        try { resolve(JSON.parse(xhr.responseText).secure_url); }
+        catch { reject(new Error('Response parse error')); }
+      } else {
+        reject(new Error(`Upload gagal: HTTP ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error — cek koneksi'));
+    xhr.ontimeout = () => reject(new Error('Upload timeout'));
+    xhr.timeout = 120000; // 2 menit max
+
+    xhr.send(fd);
+  });
+}
+
+// Upload progress toast ID
+let _uploadToastInterval = null;
+
 async function sendMediaFiles(){
-  if(!activeConvoId||!pendingFiles.length) return;
-  const files=[...pendingFiles], caption=document.getElementById('msg-input').value.trim();
-  document.getElementById('msg-input').value=''; autoResize(document.getElementById('msg-input'));
-  pendingFiles=[]; renderMediaPreview();
-  for(let i=0;i<files.length;i++){
-    const {file,type}=files[i];
-    showToast(`Mengupload ${i+1}/${files.length}...`);
+  if(!activeConvoId || !pendingFiles.length) return;
+
+  // Cek session dulu
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){ showToast('Sesi habis, silakan login ulang.'); showScreen('screen-auth'); return; }
+
+  const files = [...pendingFiles];
+  const caption = document.getElementById('msg-input').value.trim();
+  document.getElementById('msg-input').value = '';
+  autoResize(document.getElementById('msg-input'));
+  pendingFiles = [];
+  renderMediaPreview();
+
+  // Disable send btn selama upload
+  const sendBtn = document.querySelector('.send-btn');
+  const mediaBtn = document.querySelector('.media-btn');
+  sendBtn.disabled = true;
+  if(mediaBtn) mediaBtn.style.pointerEvents = 'none';
+
+  let successCount = 0;
+
+  for(let i = 0; i < files.length; i++){
+    const { file, type, previewUrl } = files[i];
+    const label = `${i+1}/${files.length}: ${file.name}`;
+
+    // Toast progress
+    showToast(`⏫ Mengupload ${label} (0%)`);
+
     try {
-      const url=await uploadToCloudinary(file,type);
-      await sb.from('messages').insert({conversation_id:activeConvoId,sender_id:ME.id,text:(i===0&&caption)?caption:'',is_read:false,reply_to_id:(i===0&&replyTo?.id)||null,reactions:{},media_url:url,media_type:type,media_name:file.name});
-      await sb.from('conversations').update({updated_at:new Date().toISOString()}).eq('id',activeConvoId);
-      URL.revokeObjectURL(files[i].previewUrl);
-    } catch(err){ showToast(`Gagal: ${file.name}`); console.error(err); }
+      const url = await uploadToCloudinary(file, type, pct => {
+        showToast(`⏫ ${label} — ${pct}%`);
+      });
+
+      // Insert pesan
+      const { error: msgErr } = await sb.from('messages').insert({
+        conversation_id: activeConvoId,
+        sender_id: ME.id,
+        text: (i === 0 && caption) ? caption : '',
+        is_read: false,
+        reply_to_id: (i === 0 && replyTo?.id) ? replyTo.id : null,
+        reactions: {},
+        media_url: url,
+        media_type: type,
+        media_name: file.name
+      });
+
+      if(msgErr){
+        console.error('insert msg error:', msgErr);
+        showToast(`❌ Gagal kirim ${file.name}: ${msgErr.message}`);
+      } else {
+        successCount++;
+        await sb.from('conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', activeConvoId);
+      }
+
+      URL.revokeObjectURL(previewUrl);
+
+    } catch(err){
+      console.error('upload error:', err);
+      showToast(`❌ ${file.name}: ${err.message}`);
+    }
   }
-  cancelReply(); showToast('Terkirim!');
+
+  // Re-enable
+  sendBtn.disabled = false;
+  if(mediaBtn) mediaBtn.style.pointerEvents = '';
+
+  cancelReply();
+  if(successCount > 0) showToast(`✅ ${successCount} file terkirim!`);
 }
 async function downloadMedia(url,filename,e){
   if(e){e.preventDefault();e.stopPropagation();}
@@ -1178,15 +1356,20 @@ function startRealtimeClock(){
 //  UTILS
 // ════════════════════════════════
 function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  // Hapus splash dari DOM setelah pertama kali berpindah screen
-  const splash=document.getElementById('screen-splash');
+  const target = document.getElementById(id);
+  if(!target){ console.warn('[showScreen] not found:', id); return; }
+  // Sembunyikan semua screen (kecuali splash biar ga flicker)
+  document.querySelectorAll('.screen').forEach(s=>{
+    if(s.id !== 'screen-splash') s.classList.remove('active');
+  });
+  target.classList.add('active');
+  // Fade out splash
+  const splash = document.getElementById('screen-splash');
   if(splash && id !== 'screen-splash'){
-    splash.style.transition='opacity .3s';
-    splash.style.opacity='0';
-    setTimeout(()=>splash.remove(), 300);
+    splash.style.transition = 'opacity .25s';
+    splash.style.opacity = '0';
+    setTimeout(()=>{ if(splash.parentNode) splash.remove(); }, 280);
   }
-  document.getElementById(id).classList.add('active');
 }
 function avatarUrl(name){ return `https://ui-avatars.com/api/?name=${encodeURIComponent(name||'?')}&background=1e3a5f&color=60a5fa&bold=true`; }
 function fmtTime(ts){ const d=new Date(ts),now=new Date(),diff=now-d; if(diff<60000) return 'baru saja'; if(diff<3600000) return Math.floor(diff/60000)+'m'; if(diff<86400000) return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('id-ID',{weekday:'short'}); return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
