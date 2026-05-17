@@ -294,7 +294,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 <div id="screen-splash" class="screen active">
   <div class="splash-logo">💬</div>
   <h1>XREZZKY<span>Chat</span></h1>
-  <p>Memuat sesi...</p>
+  <p id="splash-status">Memuat sesi...</p>
 </div>
 
 <!-- AUTH -->
@@ -576,7 +576,6 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 
   if (session?.user) {
-    // Kalau user sama dan sudah init, skip — cegah double init
     if (_appInited && ME?.id === session.user.id) {
       showScreen('screen-app');
       return;
@@ -594,6 +593,44 @@ sb.auth.onAuthStateChange(async (event, session) => {
   // Tidak ada session = belum login
   showScreen('screen-auth');
 });
+
+// ── FALLBACK: onAuthStateChange kadang ga fire INITIAL_SESSION
+// di static hosting (GitHub Pages). Cek manual setelah 300ms.
+// Kalau splash masih aktif artinya event belum fire → paksa cek.
+setTimeout(async () => {
+  const splash = document.getElementById('screen-splash');
+  if (!splash) return; // sudah pindah screen, aman
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      if (!_appInited) {
+        ME = session.user;
+        try { await loadMyProfile(); } catch(e) {}
+        showScreen('screen-app');
+        _appInited = true;
+        initApp();
+      }
+    } else {
+      showScreen('screen-auth');
+    }
+  } catch(e) {
+    console.error('getSession fallback error:', e);
+    showScreen('screen-auth');
+  }
+}, 300);
+
+// ── HARD TIMEOUT 5 detik — kalau masih di splash paksa ke auth screen
+setTimeout(() => {
+  const splash = document.getElementById('screen-splash');
+  if (!splash) return;
+  const st = document.getElementById('splash-status');
+  if (st) st.innerText = 'Koneksi lambat, mengalihkan...';
+  setTimeout(() => {
+    if (document.getElementById('screen-splash')) {
+      showScreen('screen-auth');
+    }
+  }, 800);
+}, 5000);
 
 // ════════════════════════════════
 //  AUTH FUNCTIONS
