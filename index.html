@@ -279,6 +279,32 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 @keyframes spin{to{transform:rotate(360deg)}}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:10px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:500;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #toast.show{opacity:1}
+/* USER PROFILE MODAL */
+.profile-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:400;display:none;align-items:flex-end;justify-content:center}
+.profile-modal-overlay.open{display:flex}
+.profile-modal{width:100%;max-width:480px;background:var(--bg2);border-radius:28px 28px 0 0;border:1px solid var(--border2);padding:0 0 40px;animation:slideUp .28s cubic-bezier(.4,0,.2,1)}
+.profile-modal-handle{width:36px;height:4px;background:var(--surface2);border-radius:99px;margin:14px auto 0}
+.profile-modal-header{display:flex;flex-direction:column;align-items:center;padding:20px 24px 16px;gap:6px;border-bottom:1px solid var(--border)}
+.pm-avatar-wrap{position:relative;width:84px;height:84px}
+.pm-avatar-wrap img{width:84px;height:84px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 24px rgba(59,130,246,0.35);object-fit:cover}
+.pm-online-dot{position:absolute;bottom:3px;right:3px;width:14px;height:14px;background:var(--green);border-radius:50%;border:2px solid var(--bg2)}
+.pm-name{font-size:20px;font-weight:900;margin-top:4px}
+.pm-bio{font-size:13px;color:var(--text2);text-align:center;line-height:1.5;max-width:280px}
+.pm-status-badge{font-size:11px;font-weight:700;padding:3px 12px;border-radius:99px}
+.pm-status-badge.online{background:rgba(34,197,94,.15);color:var(--green)}
+.pm-status-badge.offline{background:var(--surface2);color:var(--text3)}
+.pm-stats{display:flex;justify-content:center;gap:36px;padding:16px 24px;border-bottom:1px solid var(--border)}
+.pm-stat{text-align:center}
+.pm-stat strong{display:block;font-size:20px;font-weight:900}
+.pm-stat span{font-size:11px;color:var(--text3)}
+.pm-actions{display:flex;gap:10px;padding:16px 20px 0}
+.pm-btn{flex:1;padding:14px;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:.15s;display:flex;align-items:center;justify-content:center;gap:7px}
+.pm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.35)}
+.pm-btn.primary:hover{background:var(--accent2)}
+.pm-btn.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.pm-btn.secondary:hover{background:var(--surface)}
+.pm-btn.danger{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.pm-btn.danger:hover{background:rgba(239,68,68,.2)}
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
 #lightbox.open{display:flex}
 #lightbox img,#lightbox video{max-width:95vw;max-height:82dvh;border-radius:12px;object-fit:contain}
@@ -487,6 +513,27 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
     </div>
     <button class="btn-primary" onclick="doResetPassword()" id="btn-reset">Simpan Password Baru</button>
     <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--text3);cursor:pointer;" onclick="showScreen('screen-auth')">← Kembali ke Login</p>
+  </div>
+</div>
+
+<!-- USER PROFILE MODAL -->
+<div class="profile-modal-overlay" id="modal-user-profile" onclick="if(event.target===this)closeUserProfile()">
+  <div class="profile-modal">
+    <div class="profile-modal-handle"></div>
+    <div class="profile-modal-header">
+      <div class="pm-avatar-wrap">
+        <img id="pm-avatar" src="">
+        <div class="pm-online-dot" id="pm-online-dot" style="display:none"></div>
+      </div>
+      <div class="pm-name" id="pm-name"></div>
+      <div class="pm-bio" id="pm-bio"></div>
+      <div class="pm-status-badge" id="pm-status-badge"></div>
+    </div>
+    <div class="pm-stats">
+      <div class="pm-stat"><strong id="pm-followers">-</strong><span>Pengikut</span></div>
+      <div class="pm-stat"><strong id="pm-following">-</strong><span>Mengikuti</span></div>
+    </div>
+    <div class="pm-actions" id="pm-actions"></div>
   </div>
 </div>
 
@@ -890,12 +937,17 @@ function cleanupChannels(){ [msgCh,typingCh,presCh,convoCh,followCh].forEach(c=>
 //  SIDEBAR TABS
 // ════════════════════════════════
 function switchSidebarTab(tab){
-  document.getElementById('tab-messages').classList.toggle('active',tab==='messages');
-  document.getElementById('tab-people').classList.toggle('active',tab==='people');
-  document.getElementById('panel-messages').classList.toggle('active',tab==='messages');
-  document.getElementById('panel-people').classList.toggle('active',tab==='people');
-  document.getElementById('search-wrap-msgs').style.display=tab==='messages'?'':'none';
-  if(tab==='people'&&!allUsers.length) loadPeopleList();
+  document.getElementById('tab-messages').classList.toggle('active', tab==='messages');
+  document.getElementById('tab-people').classList.toggle('active', tab==='people');
+  document.getElementById('panel-messages').classList.toggle('active', tab==='messages');
+  document.getElementById('panel-people').classList.toggle('active', tab==='people');
+  document.getElementById('search-wrap-msgs').style.display = tab==='messages' ? '' : 'none';
+  // Selalu reload kalau tab people dibuka dan list kosong / error
+  if(tab === 'people') {
+    const el = document.getElementById('people-list');
+    const isEmpty = !allUsers.length || el.querySelector('.convo-empty');
+    if(isEmpty) loadPeopleList();
+  }
 }
 
 // ════════════════════════════════
@@ -949,27 +1001,32 @@ async function toggleFollow(targetId,targetUsername,targetEmail){
 }
 
 async function ensureConversation(partnerId, partnerUsername, partnerEmail){
-  // PENTING: gunakan 1 conversation ID yang sama untuk kedua pihak
-  // Caranya: selalu sort dua UUID, yang lebih kecil jadi "owner" canonical
-  // Ini memastikan A→B dan B→A selalu dapat row yang sama
   const [uid1, uid2] = [ME.id, partnerId].sort();
 
-  const {data, error} = await sb.from('conversations').upsert(
-    {owner_id: uid1, partner_id: uid2, updated_at: new Date().toISOString()},
-    {onConflict: 'owner_id,partner_id', ignoreDuplicates: false}
-  ).select('id').single();
+  // Step 1: upsert dulu
+  const { error: upsertErr } = await sb.from('conversations').upsert(
+    { owner_id: uid1, partner_id: uid2, updated_at: new Date().toISOString() },
+    { onConflict: 'owner_id,partner_id', ignoreDuplicates: false }
+  );
+  if (upsertErr) console.warn('ensureConvo upsert:', upsertErr.message);
 
-  if (error) {
-    console.error('ensureConversation error:', error.message);
+  // Step 2: fetch ID secara terpisah — lebih reliable dari upsert return
+  const { data, error: fetchErr } = await sb.from('conversations')
+    .select('id')
+    .eq('owner_id', uid1)
+    .eq('partner_id', uid2)
+    .single();
+
+  if (fetchErr) {
+    console.error('ensureConvo fetch:', fetchErr.message);
     return null;
   }
   return data?.id || null;
 }
 
-// Dapatkan conversation ID yang shared antara dua user
 async function getSharedConvoId(partnerId){
   const [uid1, uid2] = [ME.id, partnerId].sort();
-  const {data} = await sb.from('conversations')
+  const { data } = await sb.from('conversations')
     .select('id')
     .eq('owner_id', uid1)
     .eq('partner_id', uid2)
@@ -1036,14 +1093,28 @@ function renderPeopleList(list){
 }
 
 function buildPeopleCard(u){
-  const isFollowing=followMap[u.id]==='accepted';
-  const btn=isFollowing
-    ?`<button class="btn-follow chat-now" onclick="quickOpenChat('${u.id}','${esc(u.username)}','${esc(u.email)}')"><i class="fa fa-message"></i> Chat</button>`
-    :`<button class="btn-follow not-followed" onclick="toggleFollow('${u.id}','${esc(u.username)}','${esc(u.email)}')"><i class="fa fa-user-plus"></i> Follow</button>`;
-  return `<div class="people-card" data-username="${(u.username||'').toLowerCase()}" data-email="${(u.email||'').toLowerCase()}">
-    <div class="people-card-avatar"><img src="${avatarUrl(u.username)}" alt="">${u.is_online?`<div class="online-ring"></div>`:''}</div>
-    <div class="people-info"><div class="people-name">${esc(u.username)}</div><div class="people-bio">${esc(u.bio||u.email)}</div></div>
-    <div>${btn}</div>
+  const isFollowing = followMap[u.id] === 'accepted';
+  const btn = isFollowing
+    ? `<button class="btn-follow chat-now" onclick="event.stopPropagation();quickOpenChat('${u.id}','${esc(u.username)}','${esc(u.email)}')">
+        <i class="fa fa-message"></i> Chat
+       </button>`
+    : `<button class="btn-follow not-followed" onclick="event.stopPropagation();toggleFollow('${u.id}','${esc(u.username)}','${esc(u.email)}')">
+        <i class="fa fa-user-plus"></i> Follow
+       </button>`;
+
+  return `<div class="people-card" 
+    data-username="${(u.username||'').toLowerCase()}" 
+    data-email="${(u.email||'').toLowerCase()}"
+    onclick="showUserProfile('${u.id}','${esc(u.username)}','${esc(u.email)}','${esc(u.bio||'')}',${u.is_online})">
+    <div class="people-card-avatar">
+      <img src="${avatarUrl(u.username)}" alt="">
+      ${u.is_online ? `<div class="online-ring"></div>` : ''}
+    </div>
+    <div class="people-info">
+      <div class="people-name">${esc(u.username)}</div>
+      <div class="people-bio">${esc(u.bio || 'Belum ada bio')}</div>
+    </div>
+    <div onclick="event.stopPropagation()">${btn}</div>
   </div>`;
 }
 
@@ -1057,16 +1128,19 @@ function filterPeople(v){
   });
 }
 
-async function quickOpenChat(partnerId,partnerUsername,partnerEmail){
+async function quickOpenChat(partnerId, partnerUsername, partnerEmail){
+  showToast('⏳ Membuka chat...');
   switchSidebarTab('messages');
-  // Selalu cari shared convo (canonical sort)
-  let convoId = await getSharedConvoId(partnerId);
-  if(!convoId){
-    convoId = await ensureConversation(partnerId, partnerUsername, partnerEmail);
+  try {
+    let convoId = await getSharedConvoId(partnerId);
+    if (!convoId) convoId = await ensureConversation(partnerId, partnerUsername, partnerEmail);
+    if (!convoId) { showToast('❌ Gagal membuka chat. Pastikan sudah follow user ini.'); return; }
     await loadConvos();
+    await openConvo(convoId, partnerId, partnerUsername, partnerEmail);
+  } catch(e) {
+    console.error('quickOpenChat:', e);
+    showToast('❌ Gagal: ' + e.message);
   }
-  if(convoId) await openConvo(convoId, partnerId, partnerUsername, partnerEmail);
-  else showToast('Gagal membuka chat. Coba lagi.');
 }
 
 // ════════════════════════════════
@@ -1701,7 +1775,75 @@ function startRealtimeClock(){
 // ════════════════════════════════
 //  UTILS
 // ════════════════════════════════
-// showScreen didefinisikan di atas (awal script)
+// ════════════════════════════════
+//  USER PROFILE MODAL
+// ════════════════════════════════
+let _profileUserId = null;
+
+async function showUserProfile(userId, username, email, bio, isOnline){
+  _profileUserId = userId;
+  const overlay = document.getElementById('modal-user-profile');
+  overlay.classList.add('open');
+
+  // Set data langsung
+  document.getElementById('pm-avatar').src = avatarUrl(username);
+  document.getElementById('pm-name').innerText = username;
+  document.getElementById('pm-bio').innerText = bio || 'Belum ada bio';
+
+  const dot = document.getElementById('pm-online-dot');
+  const badge = document.getElementById('pm-status-badge');
+  if(isOnline){
+    dot.style.display = 'block';
+    badge.innerText = '🟢 Online';
+    badge.className = 'pm-status-badge online';
+  } else {
+    dot.style.display = 'none';
+    badge.innerText = 'Offline';
+    badge.className = 'pm-status-badge offline';
+  }
+
+  // Reset stats & actions
+  document.getElementById('pm-followers').innerText = '-';
+  document.getElementById('pm-following').innerText = '-';
+  renderProfileActions(userId, username, email);
+
+  // Load stats async
+  try {
+    const [{ count: flwrs }, { count: flwing }] = await Promise.all([
+      sb.from('follows').select('*', {count:'exact', head:true}).eq('receiver_id', userId).eq('status','accepted'),
+      sb.from('follows').select('*', {count:'exact', head:true}).eq('sender_id', userId).eq('status','accepted'),
+    ]);
+    document.getElementById('pm-followers').innerText = flwrs || 0;
+    document.getElementById('pm-following').innerText = flwing || 0;
+  } catch(e) { console.error('profile stats:', e); }
+}
+
+function renderProfileActions(userId, username, email){
+  const isFollowing = followMap[userId] === 'accepted';
+  const actionsEl = document.getElementById('pm-actions');
+
+  let html = '';
+
+  if(isFollowing){
+    html += `<button class="pm-btn primary" onclick="closeUserProfile();quickOpenChat('${userId}','${esc(username)}','${esc(email)}')">
+      <i class="fa fa-message"></i> Kirim Pesan
+    </button>`;
+    html += `<button class="pm-btn danger" onclick="toggleFollow('${userId}','${esc(username)}','${esc(email)}');closeUserProfile()">
+      <i class="fa fa-user-minus"></i> Unfollow
+    </button>`;
+  } else {
+    html += `<button class="pm-btn primary" onclick="toggleFollow('${userId}','${esc(username)}','${esc(email)}');renderProfileActions('${userId}','${esc(username)}','${esc(email)}')">
+      <i class="fa fa-user-plus"></i> Follow
+    </button>`;
+  }
+
+  actionsEl.innerHTML = html;
+}
+
+function closeUserProfile(){
+  document.getElementById('modal-user-profile').classList.remove('open');
+  _profileUserId = null;
+}
 function avatarUrl(name){ return `https://ui-avatars.com/api/?name=${encodeURIComponent(name||'?')}&background=1e3a5f&color=60a5fa&bold=true`; }
 function fmtTime(ts){ const d=new Date(ts),now=new Date(),diff=now-d; if(diff<60000) return 'baru saja'; if(diff<3600000) return Math.floor(diff/60000)+'m'; if(diff<86400000) return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('id-ID',{weekday:'short'}); return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
 function truncate(s,n){ return s&&s.length>n?s.slice(0,n)+'…':s||''; }
