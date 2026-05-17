@@ -510,157 +510,242 @@ const sb = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3bXh3end1ZHdlZndhYm5mZ3F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NTY5MTUsImV4cCI6MjA5NDQzMjkxNX0.R4fb-wcqC1F_lA4t32WHinoR2zRdA3DFScny8lyWysA',
   {
     auth: {
-      persistSession: true,          // simpan session di localStorage HP
-      storageKey: 'xrezzky-session', // key unik biar ga bentrok sama app lain
+      persistSession: true,
+      storageKey: 'xrezzky-session',
       storage: window.localStorage,
-      autoRefreshToken: true,        // auto refresh token sebelum expired
-      detectSessionInUrl: true       // baca token dari URL (buat reset password link)
+      autoRefreshToken: true,
+      detectSessionInUrl: true
     }
   }
 );
+
 const CLOUD = 'dknodp2zg', PRESET = 'chat_Unsigned';
-const MAX_IMG = 5*1024*1024, MAX_VID = 10*1024*1024;
-
-// ── Session init: SATU sumber kebenaran = onAuthStateChange ──
-// Jangan campurkan getSession() manual dgn onAuthStateChange,
-// itu penyebab crash / double init
-let _authReady = false;
-
-// Timeout fallback: kalau 8 detik ga ada event, paksa ke auth screen
-const _authTimeout = setTimeout(() => {
-  if (!_authReady) {
-    console.warn('Auth timeout — force show login');
-    showScreen('screen-auth');
-  }
-}, 8000);
+const MAX_IMG = 5 * 1024 * 1024;
+const MAX_VID = 10 * 1024 * 1024;
 
 // ════════════════════════════════
 //  STATE
 // ════════════════════════════════
-let ME=null, MY_PROFILE=null;
-let convos=[], activeConvoId=null, activePartner=null, msgs=[], replyTo=null;
-let msgCh=null, typingCh=null, presCh=null, convoCh=null, followCh=null;
-let searchTimer=null, typingShowTimer=null;
-let pendingFiles=[], lightboxMedia=null;
-let followMap={}, allUsers=[];
+let ME = null, MY_PROFILE = null;
+let convos = [], activeConvoId = null, activePartner = null, msgs = [], replyTo = null;
+let msgCh = null, typingCh = null, presCh = null, convoCh = null, followCh = null;
+let searchTimer = null, typingShowTimer = null;
+let pendingFiles = [], lightboxMedia = null;
+let followMap = {}, allUsers = [];
+let _appInited = false;
 
-const EMOJIS=['😀','😂','🥰','😎','🤔','😅','🥺','😭','🤯','🎉','🔥','💯','👍','👏','🙏','💪','✨','⚡','💎','🚀','❤️','💙','💚','💛','🧡','🤍','👻','🤖','🦄','🎮','🎯','💬','🏆','🌟','🤝','✅','❌','⚠️','💰','🎁','🌈'];
-const REACT_EMOJIS=['❤️','😂','😮','😢','🔥','👍','🎉','💯'];
+const EMOJIS = ['😀','😂','🥰','😎','🤔','😅','🥺','😭','🤯','🎉','🔥','💯','👍','👏','🙏','💪','✨','⚡','💎','🚀','❤️','💙','💚','💛','🧡','🤍','👻','🤖','🦄','🎮','🎯','💬','🏆','🌟','🤝','✅','❌','⚠️','💰','🎁','🌈'];
+const REACT_EMOJIS = ['❤️','😂','😮','😢','🔥','👍','🎉','💯'];
 
 // ════════════════════════════════
-//  AUTH
+//  SHOW SCREEN — definisi PERTAMA
+//  supaya semua fungsi bisa memanggilnya
 // ════════════════════════════════
-function switchAuthTab(tab){
-  ['login','register','forgot'].forEach(t=>{ document.getElementById('form-'+t).style.display=t===tab?'':'none'; });
-  document.querySelectorAll('.auth-tab').forEach((b,i)=>{ b.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')); });
-  clearAuthMsg();
-}
-function clearAuthMsg(){ ['auth-error','auth-success','auth-notice'].forEach(id=>{ document.getElementById(id).style.display='none'; }); }
-function showError(msg){ const el=document.getElementById('auth-error'); el.innerText=msg; el.style.display='block'; }
-function showSuccess(msg){ const el=document.getElementById('auth-success'); el.innerText=msg; el.style.display='block'; }
-
-async function doLogin(){
-  clearAuthMsg();
-  const email=document.getElementById('l-email').value.trim(), pass=document.getElementById('l-pass').value;
-  if(!email||!pass) return showError('Isi email dan password.');
-  const btn=document.querySelector('#form-login .btn-primary');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
-  const {error}=await sb.auth.signInWithPassword({email,password:pass});
-  btn.disabled=false; btn.innerText='Masuk';
-  if(error){
-    const msg=error.message||'';
-    if(msg.includes('Invalid login credentials')) return showError('Email atau password salah.');
-    if(msg.includes('Email not confirmed')) return showError('Email belum diverifikasi. Cek inbox/spam kamu.');
-    if(msg.includes('rate limit')) return showError('⏳ Terlalu banyak percobaan. Tunggu beberapa menit.');
-    return showError(msg);
+function showScreen(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  document.querySelectorAll('.screen').forEach(s => {
+    if (s.id !== 'screen-splash') s.classList.remove('active');
+  });
+  target.classList.add('active');
+  // Fade out splash
+  const splash = document.getElementById('screen-splash');
+  if (splash && id !== 'screen-splash') {
+    splash.style.transition = 'opacity .25s';
+    splash.style.opacity = '0';
+    setTimeout(() => { if (splash.parentNode) splash.remove(); }, 280);
   }
 }
 
-async function doRegister(){
-  clearAuthMsg();
-  const username=document.getElementById('r-user').value.trim();
-  const email=document.getElementById('r-email').value.trim();
-  const pass=document.getElementById('r-pass').value;
-  if(!username) return showError('Username wajib diisi.');
-  if(!email) return showError('Email wajib diisi.');
-  if(pass.length<6) return showError('Password minimal 6 karakter.');
-  const btn=document.querySelector('#form-register .btn-primary');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
-  const {data,error}=await sb.auth.signUp({email,password:pass});
-  btn.disabled=false; btn.innerText='Buat Akun';
-  if(error){
-    const msg=error.message||'';
-    if(msg.includes('rate limit')||msg.includes('email rate')) return showError('⏳ Terlalu banyak percobaan registrasi. Tunggu beberapa menit lalu coba lagi.');
-    if(msg.includes('already registered')||msg.includes('already exists')) return showError('Email ini sudah terdaftar. Coba login.');
-    return showError(msg);
-  }
-  if(data.user) await sb.from('users').upsert({id:data.user.id,username,email,bio:'',created_at:new Date().toISOString()});
-  showSuccess('Akun dibuat! Cek email untuk verifikasi (atau langsung login jika email konfirmasi dimatikan).');
-  document.getElementById('auth-notice').style.display='block';
-}
-
-async function doForgot(){
-  clearAuthMsg();
-  const email=document.getElementById('f-email').value.trim();
-  if(!email) return showError('Masukkan email kamu.');
-  // Redirect ke halaman reset-password.html yang terpisah
-  const baseUrl = window.location.href.replace(/\/[^/]*$/, '');
-  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo: baseUrl+'/reset-password.html'});
-  if(error) return showError(error.message);
-  showSuccess('Link reset dikirim!');
-}
-
-async function doLogout(){
-  await upsertPresence(false); await sb.auth.signOut();
-  ME=null; MY_PROFILE=null; followMap={}; allUsers=[];
-  cleanupChannels(); showScreen('screen-auth');
-}
-
-sb.auth.onAuthStateChange(async(event, session) => {
-  // Tandai auth sudah ready, batalkan timeout fallback
-  _authReady = true;
-  clearTimeout(_authTimeout);
-
-  console.log('[auth]', event, session?.user?.email || 'no user');
+// ════════════════════════════════
+//  AUTH HANDLER
+// ════════════════════════════════
+sb.auth.onAuthStateChange(async (event, session) => {
+  console.log('[auth]', event, session?.user?.email || 'no session');
 
   if (event === 'PASSWORD_RECOVERY') {
     showScreen('screen-reset-password');
     return;
   }
 
-  if (event === 'SIGNED_OUT' || (!session && event !== 'PASSWORD_RECOVERY')) {
-    window._appInited = false;
+  if (event === 'SIGNED_OUT') {
+    _appInited = false;
     ME = null; MY_PROFILE = null;
     showScreen('screen-auth');
     return;
   }
 
-  if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
-    // Cegah double init — kalau sudah init dan user sama, skip
-    if (window._appInited && ME?.id === session.user.id) return;
-
-    ME = session.user;
-    try {
-      await loadMyProfile();
-    } catch(e) {
-      console.error('loadMyProfile error:', e);
+  if (session?.user) {
+    // Kalau user sama dan sudah init, skip — cegah double init
+    if (_appInited && ME?.id === session.user.id) {
+      showScreen('screen-app');
+      return;
     }
+    ME = session.user;
+    try { await loadMyProfile(); } catch(e) { console.error('loadMyProfile:', e); }
     showScreen('screen-app');
-
-    if (!window._appInited) {
-      window._appInited = true;
+    if (!_appInited) {
+      _appInited = true;
       initApp();
     }
+    return;
   }
+
+  // Tidak ada session = belum login
+  showScreen('screen-auth');
 });
 
-async function loadMyProfile(){
-  const {data}=await sb.from('users').select('*').eq('id',ME.id).single();
-  MY_PROFILE=data;
-  if(!MY_PROFILE){
-    await sb.from('users').insert({id:ME.id,username:ME.email.split('@')[0],email:ME.email,bio:''});
-    const {data:d2}=await sb.from('users').select('*').eq('id',ME.id).single();
-    MY_PROFILE=d2;
+// ════════════════════════════════
+//  AUTH FUNCTIONS
+// ════════════════════════════════
+function switchAuthTab(tab) {
+  ['login','register','forgot'].forEach(t => {
+    document.getElementById('form-'+t).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('.auth-tab').forEach((b, i) => {
+    b.classList.toggle('active', (i===0&&tab==='login') || (i===1&&tab==='register'));
+  });
+  clearAuthMsg();
+}
+
+function clearAuthMsg() {
+  ['auth-error','auth-success','auth-notice'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function showError(msg) {
+  const el = document.getElementById('auth-error');
+  if (!el) return;
+  el.innerText = msg;
+  el.style.display = 'block';
+}
+
+function showSuccess(msg) {
+  const el = document.getElementById('auth-success');
+  if (!el) return;
+  el.innerText = msg;
+  el.style.display = 'block';
+}
+
+async function doLogin() {
+  clearAuthMsg();
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  if (!email || !pass) return showError('Isi email dan password.');
+
+  const btn = document.querySelector('#form-login .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Masuk...';
+
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      const m = error.message || '';
+      if (m.includes('Invalid login credentials'))  showError('Email atau password salah.');
+      else if (m.includes('Email not confirmed'))   showError('Email belum diverifikasi. Cek inbox/spam.');
+      else if (m.includes('rate limit'))            showError('⏳ Terlalu banyak percobaan. Tunggu dulu.');
+      else                                          showError(m);
+    }
+    // Kalau sukses: onAuthStateChange handle redirect ke screen-app
+  } catch(e) {
+    showError('Gagal terhubung. Cek koneksi internet kamu.');
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Masuk';
+  }
+}
+
+async function doRegister() {
+  clearAuthMsg();
+  const username = document.getElementById('r-user').value.trim();
+  const email    = document.getElementById('r-email').value.trim();
+  const pass     = document.getElementById('r-pass').value;
+
+  if (!username)      return showError('Username wajib diisi.');
+  if (!email)         return showError('Email wajib diisi.');
+  if (pass.length<6)  return showError('Password minimal 6 karakter.');
+
+  const btn = document.querySelector('#form-register .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Membuat akun...';
+
+  try {
+    const { data, error } = await sb.auth.signUp({ email, password: pass });
+    if (error) {
+      const m = error.message || '';
+      if (m.includes('rate limit') || m.includes('email rate'))
+        showError('⏳ Limit email tercapai. Tunggu beberapa menit.');
+      else if (m.includes('already registered') || m.includes('already exists'))
+        showError('Email sudah terdaftar. Coba login.');
+      else
+        showError(m);
+      return;
+    }
+
+    // Insert profil user
+    if (data?.user) {
+      await sb.from('users').upsert({
+        id: data.user.id,
+        username,
+        email,
+        bio: '',
+        created_at: new Date().toISOString()
+      });
+
+      // Kalau email confirmation dimatikan → user langsung punya session
+      // onAuthStateChange akan auto redirect ke app
+      if (data.session) {
+        // Sudah login otomatis, biarkan onAuthStateChange handle
+        return;
+      }
+    }
+
+    showSuccess('Akun dibuat! ');
+    document.getElementById('auth-notice').style.display = 'block';
+
+  } catch(e) {
+    showError('Gagal terhubung. Cek koneksi internet kamu.');
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Buat Akun';
+  }
+}
+
+async function doForgot() {
+  clearAuthMsg();
+  const email = document.getElementById('f-email').value.trim();
+  if (!email) return showError('Masukkan email kamu.');
+  const baseUrl = window.location.href.replace(/\/[^/]*(\?.*)?$/, '');
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: baseUrl + '/reset-password.html'
+  });
+  if (error) return showError(error.message);
+  showSuccess('Link reset dikirim! Cek inbox/spam kamu.');
+}
+
+async function doLogout() {
+  try { await upsertPresence(false); } catch(e) {}
+  cleanupChannels();
+  _appInited = false;
+  ME = null; MY_PROFILE = null; followMap = {}; allUsers = [];
+  await sb.auth.signOut();
+  // onAuthStateChange handle showScreen('screen-auth')
+}
+
+async function loadMyProfile() {
+  const { data } = await sb.from('users').select('*').eq('id', ME.id).single();
+  MY_PROFILE = data;
+  if (!MY_PROFILE) {
+    await sb.from('users').insert({
+      id: ME.id,
+      username: ME.email.split('@')[0],
+      email: ME.email,
+      bio: ''
+    });
+    const { data: d2 } = await sb.from('users').select('*').eq('id', ME.id).single();
+    MY_PROFILE = d2;
   }
   updateSidebarUI();
 }
@@ -915,7 +1000,7 @@ function buildMsgHTML(m){
     bubbleClass+=' media-bubble';
     const fname=m.media_name||(m.media_type==='video'?'video.mp4':'foto.jpg');
     if(m.media_type==='video'){
-      bubbleContent=`<video class="msg-media-video" controls preload="metadata"><source src="${m.media_url}" type="video/mp4"></video><div class="msg-media-footer"><span class="msg-media-name">🎥 ${esc(fname)}</span><button class="msg-download-btn" onclick="downloadMedia('${m.media_url}','${esc(fname)}',event)"><i class="fa fa-download"></i> Unduh</button></div>`;
+      bubbleContent=`<video class="msg-media-video" controls preload="none"><source src="${m.media_url}" type="video/mp4"></video><div class="msg-media-footer"><span class="msg-media-name">🎥 ${esc(fname)}</span><button class="msg-download-btn" onclick="downloadMedia('${m.media_url}','${esc(fname)}',event)"><i class="fa fa-download"></i> Unduh</button></div>`;
     } else {
       bubbleContent=`<img class="msg-media-img" src="${m.media_url}" alt="foto" loading="lazy" onclick="openLightbox('${m.media_url}','image','${esc(fname)}')"><div class="msg-media-footer"><span class="msg-media-name">🖼️ ${esc(fname)}</span><button class="msg-download-btn" onclick="downloadMedia('${m.media_url}','${esc(fname)}',event)"><i class="fa fa-download"></i> Unduh</button></div>`;
     }
@@ -996,33 +1081,33 @@ async function sendMsg(){
 // ════════════════════════════════
 function handleFileSelect(e){
   const files = Array.from(e.target.files || []);
-  e.target.value = ''; // reset input supaya bisa pilih file yang sama lagi
+  e.target.value = '';
 
+  const ALLOWED_IMG = ['image/jpeg','image/png','image/gif','image/webp','image/heic','image/heif'];
+  const ALLOWED_VID = ['video/mp4','video/webm','video/quicktime','video/x-matroska','video/3gpp'];
   let blocked = [];
 
   for(const file of files){
-    const isVid = file.type.startsWith('video/');
-    const isImg = file.type.startsWith('image/');
+    const isVid = ALLOWED_VID.includes(file.type) || file.type.startsWith('video/');
+    const isImg = ALLOWED_IMG.includes(file.type) || file.type.startsWith('image/');
 
-    // Reject non-media
     if(!isVid && !isImg){
       showToast(`❌ Format tidak didukung: ${file.name}`);
       continue;
     }
 
-    // HARD BLOCK size — tutup file kalau kegedean
     const maxSize = isVid ? MAX_VID : MAX_IMG;
     if(file.size > maxSize){
       blocked.push({ name: file.name, size: fmtBytes(file.size), max: isVid ? '10MB' : '5MB' });
       continue;
     }
 
-    // Aman — tambah ke queue
-    const previewUrl = URL.createObjectURL(file);
+    // Untuk video: JANGAN buat blob URL — langsung simpan file object saja
+    // Blob URL video = browser decode seluruh video ke RAM = freeze
+    const previewUrl = isVid ? null : URL.createObjectURL(file);
     pendingFiles.push({ file, previewUrl, type: isVid ? 'video' : 'image', name: file.name });
   }
 
-  // Tampilkan pesan blocked jelas
   if(blocked.length > 0){
     const detail = blocked.map(b => `• ${b.name} (${b.size}, max ${b.max})`).join('\n');
     showBlockedAlert(`File berikut DITOLAK karena melebihi batas:\n\n${detail}\n\nFoto max 5MB, Video max 10MB.`);
@@ -1062,19 +1147,27 @@ function renderMediaPreview(){
   const s = document.getElementById('media-preview-strip');
   if(!pendingFiles.length){ s.classList.remove('visible'); s.innerHTML=''; return; }
   s.classList.add('visible');
-  s.innerHTML = pendingFiles.map((f,i) => `
-    <div class="media-thumb">
-      ${f.type==='video'
-        ? `<video src="${f.previewUrl}" muted preload="metadata" style="pointer-events:none;"></video>`
-        : `<img src="${f.previewUrl}" alt="">`
-      }
+  s.innerHTML = pendingFiles.map((f,i) => {
+    const isVid = f.type === 'video';
+    // Video: JANGAN load src ke browser — cukup thumbnail icon biar ga freeze
+    const thumb = isVid
+      ? `<div style="width:100%;height:100%;background:#0a0f1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+           <i class="fa fa-film" style="color:#60a5fa;font-size:22px;"></i>
+           <span style="font-size:8px;color:#94a3b8;text-align:center;padding:0 4px;word-break:break-all;line-height:1.3;">${fmtBytes(f.file.size)}</span>
+         </div>`
+      : `<img src="${f.previewUrl}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+
+    return `<div class="media-thumb" title="${esc(f.name)}">
+      ${thumb}
       <button class="media-thumb-rm" onclick="removePendingFile(${i})">✕</button>
-      <span class="media-thumb-type">${f.type==='video'?'VID':'IMG'}</span>
-    </div>`).join('');
+      <span class="media-thumb-type">${isVid ? 'VID' : 'IMG'}</span>
+    </div>`;
+  }).join('');
 }
 
 function removePendingFile(i){
-  URL.revokeObjectURL(pendingFiles[i].previewUrl);
+  const f = pendingFiles[i];
+  if(f?.previewUrl) URL.revokeObjectURL(f.previewUrl); // video previewUrl = null, skip
   pendingFiles.splice(i, 1);
   renderMediaPreview();
 }
@@ -1173,7 +1266,7 @@ async function sendMediaFiles(){
           .eq('id', activeConvoId);
       }
 
-      URL.revokeObjectURL(previewUrl);
+      if(previewUrl) URL.revokeObjectURL(previewUrl);
 
     } catch(err){
       console.error('upload error:', err);
@@ -1195,7 +1288,9 @@ async function downloadMedia(url,filename,e){
 }
 function openLightbox(url,type,name){
   lightboxMedia={url,type,name};
-  document.getElementById('lightbox-content').innerHTML=type==='video'?`<video src="${url}" controls autoplay style="max-width:95vw;max-height:82dvh;border-radius:12px;"></video>`:`<img src="${url}" alt="${esc(name)}" style="max-width:95vw;max-height:82dvh;border-radius:12px;object-fit:contain;">`;
+  document.getElementById('lightbox-content').innerHTML=type==='video'
+    ?`<video src="${url}" controls preload="none" style="max-width:95vw;max-height:82dvh;border-radius:12px;"></video>`
+    :`<img src="${url}" alt="${esc(name)}" style="max-width:95vw;max-height:82dvh;border-radius:12px;object-fit:contain;">`;
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox(){ document.getElementById('lightbox').classList.remove('open'); document.getElementById('lightbox-content').innerHTML=''; lightboxMedia=null; }
@@ -1328,11 +1423,10 @@ async function doResetPassword(){
     errEl.innerText='Gagal: '+error.message; errEl.style.display='block';
   } else {
     sucEl.innerText='✅ Password berhasil diubah! Mengalihkan ke aplikasi...'; sucEl.style.display='block';
-    // Setelah 2 detik, redirect ke app (session sudah aktif)
+    // Biarkan onAuthStateChange yang handle redirect, cukup signOut dulu biar fresh login
     setTimeout(async()=>{
-      const {data:{session}}=await sb.auth.getSession();
-      if(session?.user){ ME=session.user; await loadMyProfile(); showScreen('screen-app'); if(!window._appInited){ window._appInited=true; initApp(); } }
-      else showScreen('screen-auth');
+      await sb.auth.signOut();
+      showScreen('screen-auth');
     }, 2000);
   }
 }
@@ -1355,22 +1449,7 @@ function startRealtimeClock(){
 // ════════════════════════════════
 //  UTILS
 // ════════════════════════════════
-function showScreen(id){
-  const target = document.getElementById(id);
-  if(!target){ console.warn('[showScreen] not found:', id); return; }
-  // Sembunyikan semua screen (kecuali splash biar ga flicker)
-  document.querySelectorAll('.screen').forEach(s=>{
-    if(s.id !== 'screen-splash') s.classList.remove('active');
-  });
-  target.classList.add('active');
-  // Fade out splash
-  const splash = document.getElementById('screen-splash');
-  if(splash && id !== 'screen-splash'){
-    splash.style.transition = 'opacity .25s';
-    splash.style.opacity = '0';
-    setTimeout(()=>{ if(splash.parentNode) splash.remove(); }, 280);
-  }
-}
+// showScreen didefinisikan di atas (awal script)
 function avatarUrl(name){ return `https://ui-avatars.com/api/?name=${encodeURIComponent(name||'?')}&background=1e3a5f&color=60a5fa&bold=true`; }
 function fmtTime(ts){ const d=new Date(ts),now=new Date(),diff=now-d; if(diff<60000) return 'baru saja'; if(diff<3600000) return Math.floor(diff/60000)+'m'; if(diff<86400000) return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); if(diff<604800000) return d.toLocaleDateString('id-ID',{weekday:'short'}); return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
 function truncate(s,n){ return s&&s.length>n?s.slice(0,n)+'…':s||''; }
