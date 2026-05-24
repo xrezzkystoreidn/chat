@@ -370,19 +370,87 @@
     .clear-search:hover { text-decoration: underline; }
 
     /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
+    /* ── RESPONSIVE overrides ── */
+    @media (max-width: 900px) {
       aside { display: none; }
-      nav { padding: 0 14px; gap: 10px; }
-      main { padding: 16px; }
-      .hero { padding: 22px 20px; }
-      .hero h1 { font-size: 18px; }
-      .product-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-      .detail-modal { max-width: 100%; }
-      .detail-body { padding: 16px; }
+      #main { padding-bottom: 74px; } /* space for bottom nav */
     }
-    @media (max-width: 420px) {
-      .product-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-      .nav-brand .brand-text { display: none; }
+
+    /* ══════════════════════════════════
+       BOTTOM NAVIGATION BAR (mobile/tablet)
+       Shows on ≤ 900px, hides on desktop
+    ══════════════════════════════════ */
+    #bottomNav {
+      display: none; /* shown via JS/media */
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 300;
+      background: var(--nav);
+      border-top: 1px solid var(--border);
+      height: 62px;
+      padding: 0 4px;
+      /* safe area for notch phones */
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    @media (max-width: 900px) {
+      #bottomNav { display: flex; }
+    }
+    .bn-inner {
+      display: flex; align-items: center; width: 100%; height: 100%;
+    }
+    .bn-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 3px; cursor: pointer;
+      padding: 6px 4px; border-radius: 10px; transition: all .18s;
+      background: none; border: none; color: var(--txt2);
+      font-family: 'Poppins', sans-serif; position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bn-item:active { transform: scale(.9); }
+    .bn-item.active { color: var(--accent); }
+    .bn-item i {
+      font-size: 19px; line-height: 1;
+      transition: transform .2s;
+    }
+    .bn-item.active i { transform: translateY(-1px); }
+    .bn-item span {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: .01em; line-height: 1;
+    }
+    /* Active indicator dot */
+    .bn-item::after {
+      content: ''; position: absolute; bottom: 4px;
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--accent); opacity: 0; transition: opacity .2s;
+    }
+    .bn-item.active::after { opacity: 1; }
+    /* Badge on bottom nav */
+    .bn-badge {
+      position: absolute; top: 4px; right: calc(50% - 14px);
+      background: var(--danger); color: #fff;
+      font-size: 9px; font-weight: 800;
+      min-width: 16px; height: 16px; border-radius: 8px;
+      display: none; align-items: center; justify-content: center;
+      padding: 0 4px; line-height: 1;
+      border: 2px solid var(--nav);
+    }
+    .bn-badge.show { display: flex; }
+
+    /* Center FAB button (Deposit / highlight) */
+    .bn-fab {
+      width: 50px; height: 50px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      color: #fff; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 18px rgba(74,125,255,.45);
+      margin-bottom: 8px; transition: transform .18s, box-shadow .18s;
+      border: none; cursor: pointer; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bn-fab:active { transform: scale(.9); box-shadow: 0 2px 8px rgba(74,125,255,.3); }
+
+    /* Desktop sidebar stays, hide bottom nav */
+    @media (min-width: 901px) {
+      #bottomNav { display: none !important; }
+      .page { padding-bottom: 0 !important; }
     }
 
     /* ── BADGE NOTIF ── */
@@ -394,21 +462,121 @@
     }
 
     /* ── USER AVATAR NAV ── */
+    /* ── USER NAV CHIP ── */
     .user-nav {
       display: flex; align-items: center; gap: 8px;
       padding: 5px 10px; border-radius: var(--radius-sm);
       background: var(--surface); border: 1px solid var(--border);
-      cursor: pointer; transition: border .2s;
+      cursor: pointer; transition: border .2s; position: relative;
     }
     .user-nav:hover { border-color: var(--accent); }
     .user-nav-avatar {
-      width: 26px; height: 26px; border-radius: 50%;
+      width: 28px; height: 28px; border-radius: 50%;
       background: var(--accent); display: flex; align-items: center;
       justify-content: center; font-size: 11px; font-weight: 700;
-      color: #fff; overflow: hidden;
+      color: #fff; overflow: hidden; flex-shrink: 0;
     }
     .user-nav-avatar img { width: 100%; height: 100%; object-fit: cover; }
-    .user-nav-name { font-size: 12px; font-weight: 500; color: var(--txt); max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-nav-name { font-size: 12px; font-weight: 500; color: var(--txt); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-nav-chevron { font-size: 10px; color: var(--txt2); transition: transform .18s; }
+    .user-nav.open .user-nav-chevron { transform: rotate(180deg); }
+
+    /* Role badge on nav */
+    .nav-role-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .nrb-admin  { background: rgba(239,68,68,.2);  color: var(--danger); }
+    .nrb-seller { background: rgba(245,158,11,.2); color: var(--warn); }
+    .nrb-cs     { background: rgba(6,182,212,.2);  color: #06b6d4; }
+    .nrb-buyer  { background: rgba(74,125,255,.15); color: var(--accent); }
+
+    /* ── DROPDOWN MENU ── */
+    .nav-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0;
+      width: 240px; background: var(--nav); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      z-index: 500; display: none; overflow: hidden;
+      animation: dropDown .18s ease;
+    }
+    @keyframes dropDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .nav-dropdown.open { display: block; }
+
+    /* Dropdown header */
+    .dd-header {
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .dd-header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .dd-av {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-size: 14px; font-weight: 700;
+      color: #fff; overflow: hidden; flex-shrink: 0;
+    }
+    .dd-av img { width: 100%; height: 100%; object-fit: cover; }
+    .dd-name    { font-size: 13px; font-weight: 600; }
+    .dd-email   { font-size: 11px; color: var(--txt2); }
+    .dd-balance {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.18);
+      border-radius: 6px; padding: 6px 10px; margin-top: 6px;
+    }
+    .dd-balance .bl  { font-size: 11px; color: var(--txt2); }
+    .dd-balance .bv  { font-size: 13px; font-weight: 700; color: var(--success); }
+
+    /* Dropdown sections */
+    .dd-section { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .dd-section:last-child { border-bottom: none; }
+    .dd-section-label {
+      font-size: 10px; font-weight: 600; color: var(--txt2);
+      text-transform: uppercase; letter-spacing: .07em;
+      padding: 4px 16px 2px;
+    }
+    .dd-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; color: var(--txt2); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all .15s; text-decoration: none;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .dd-item i { width: 16px; text-align: center; font-size: 13px; }
+    .dd-item:hover { background: var(--surface); color: var(--txt); }
+    .dd-item.danger { color: var(--danger); }
+    .dd-item.danger:hover { background: rgba(239,68,68,.08); }
+    .dd-item .dd-badge {
+      margin-left: auto; font-size: 9px; font-weight: 700;
+      padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+    }
+    .dd-item .ddb-y  { background: var(--warn);    color: #000; }
+    .dd-item .ddb-r  { background: var(--danger);  color: #fff; }
+    .dd-item .ddb-g  { background: var(--success); color: #fff; }
+
+    /* ── QUICK NAV LINKS (shown when logged in, below search bar, mobile hidden) ── */
+    .quick-nav-bar {
+      display: none; /* shown when logged in */
+      align-items: center; gap: 4px;
+    }
+    .qnb-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 10px; border-radius: var(--radius-sm);
+      font-size: 12px; font-weight: 500; color: var(--txt2);
+      text-decoration: none; transition: all .18s;
+      border: 1px solid transparent;
+    }
+    .qnb-link:hover  { background: var(--surface); color: var(--txt); border-color: var(--border); }
+    .qnb-link.active { color: var(--accent); }
+
+    @media (max-width: 640px) {
+      .quick-nav-bar { display: none !important; }
+      .user-nav-name { display: none; }
+      .nav-role-badge { display: none; }
+    }
+
+    .hide-sm { }
+    @media (max-width: 900px) { .hide-sm { display: none; } }
 
     /* ── LOADER ── */
     .spinner {
@@ -427,7 +595,7 @@
 
 <!-- ══ NAVBAR ══ -->
 <nav>
-  <a class="nav-brand" href="#">
+  <a class="nav-brand" href="index.html">
     <div class="dot"></div>
     <span class="brand-text">XREZZKY <span>STORE</span></span>
   </a>
@@ -437,17 +605,82 @@
     <button onclick="doSearch()"><i class="fas fa-search"></i></button>
   </div>
 
+  <!-- Quick nav links (visible when logged in) -->
+  <div class="quick-nav-bar" id="quickNavBar">
+    <a class="qnb-link" href="riwayat.html" title="Riwayat Transaksi"><i class="fas fa-receipt"></i><span class="hide-sm">Riwayat</span></a>
+    <a class="qnb-link" href="deposit.html" title="Deposit Saldo"><i class="fas fa-wallet"></i><span class="hide-sm">Deposit</span></a>
+  </div>
+
   <div class="nav-actions">
-    <div id="navGuest">
+    <!-- GUEST -->
+    <div id="navGuest" style="display:flex; gap:6px">
       <button class="btn btn-ghost" onclick="openAuth('login')">Masuk</button>
-      <button class="btn btn-primary" onclick="openAuth('register')" style="margin-left:4px">Daftar</button>
+      <button class="btn btn-primary" onclick="openAuth('register')">Daftar</button>
     </div>
-    <div id="navUser" style="display:none">
-      <div class="user-nav" onclick="openAuth('profile')">
+
+    <!-- LOGGED IN -->
+    <div id="navUser" style="display:none; align-items:center; gap:6px">
+      <!-- User dropdown chip -->
+      <div class="user-nav" id="navUserChip" onclick="toggleDropdown()">
         <div class="user-nav-avatar" id="navAvatar">?</div>
         <span class="user-nav-name" id="navName">User</span>
+        <span class="nav-role-badge" id="navRoleBadge"></span>
+        <i class="fas fa-chevron-down user-nav-chevron" id="navChevron"></i>
+
+        <!-- Dropdown -->
+        <div class="nav-dropdown" id="navDropdown" onclick="event.stopPropagation()">
+
+          <!-- Header: avatar + name + balance -->
+          <div class="dd-header">
+            <div class="dd-header-top">
+              <div class="dd-av" id="ddAv">?</div>
+              <div>
+                <div class="dd-name" id="ddName">—</div>
+                <div class="dd-email" id="ddEmail">—</div>
+              </div>
+            </div>
+            <div class="dd-balance">
+              <span class="bl">Saldo</span>
+              <span class="bv" id="ddBalance">Rp 0</span>
+            </div>
+          </div>
+
+          <!-- Akun section (all users) -->
+          <div class="dd-section">
+            <div class="dd-section-label">Akun Saya</div>
+            <a class="dd-item" href="profil.html"><i class="fas fa-user-circle"></i> Profil Saya</a>
+            <a class="dd-item" href="riwayat.html"><i class="fas fa-receipt"></i> Riwayat Transaksi</a>
+            <a class="dd-item" href="deposit.html"><i class="fas fa-wallet"></i> Deposit Saldo</a>
+          </div>
+
+          <!-- SELLER section — only role=seller or admin -->
+          <div class="dd-section" id="ddSellerSection" style="display:none">
+            <div class="dd-section-label">Dashboard Seller</div>
+            <a class="dd-item" href="seller-dashboard.html"><i class="fas fa-store"></i> Seller Dashboard</a>
+            <a class="dd-item" href="seller-dashboard.html?tab=produk"><i class="fas fa-boxes-stacked"></i> Produk Saya</a>
+            <a class="dd-item" href="seller-dashboard.html?tab=orders"><i class="fas fa-inbox"></i> Pesanan Masuk <span class="dd-badge ddb-y" id="ddPendingOrders" style="display:none">0</span></a>
+          </div>
+
+          <!-- CS section — only role=cs or admin -->
+          <div class="dd-section" id="ddCsSection" style="display:none">
+            <div class="dd-section-label">Customer Service</div>
+            <a class="dd-item" href="cs-dashboard.html"><i class="fas fa-headset"></i> CS Dashboard</a>
+          </div>
+
+          <!-- ADMIN section — only role=admin -->
+          <div class="dd-section" id="ddAdminSection" style="display:none">
+            <div class="dd-section-label">Administrator</div>
+            <a class="dd-item" href="admin-panel.html"><i class="fas fa-chart-pie"></i> Admin Panel</a>
+            <a class="dd-item" href="deposit-admin.html"><i class="fas fa-qrcode"></i> Kelola Deposit <span class="dd-badge ddb-r" id="ddPendingDeposit" style="display:none">0</span></a>
+          </div>
+
+          <!-- Logout -->
+          <div class="dd-section">
+            <button class="dd-item danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Keluar</button>
+          </div>
+
+        </div>
       </div>
-      <button class="btn btn-ghost" onclick="logout()" style="margin-left:6px; font-size:12px; padding:6px 10px"><i class="fas fa-sign-out-alt"></i></button>
     </div>
   </div>
 </nav>
@@ -456,20 +689,21 @@
 <div class="page">
 
   <!-- ── SIDEBAR ── -->
-  <aside>
-    <div class="sidebar-label">Menu</div>
-    <button class="sidebar-item active" onclick="setCategory(null, this)"><i class="fas fa-home"></i> Beranda</button>
-    <button class="sidebar-item" onclick="setCategory('akun', this)"><i class="fas fa-user-shield"></i> Akun & Boost</button>
-    <button class="sidebar-item" onclick="setCategory('joki', this)"><i class="fas fa-gamepad"></i> Joki & Layanan</button>
-    <button class="sidebar-item" onclick="setCategory('item', this)"><i class="fas fa-gem"></i> Item & Skin</button>
-    <button class="sidebar-item" onclick="setCategory('top-up', this)"><i class="fas fa-coins"></i> Top Up</button>
-    <button class="sidebar-item" onclick="setCategory('digital', this)"><i class="fas fa-download"></i> Digital</button>
+  <aside id="sidebarEl">
+    <div class="sidebar-label">Kategori</div>
+    <button class="sidebar-item active" id="sideAllBtn" onclick="setCategory(null, this)">
+      <i class="fas fa-home"></i> Semua Produk
+    </button>
+    <!-- Dynamic categories loaded from Supabase -->
+    <div id="sidebarCategories"></div>
 
     <div class="sidebar-sep"></div>
     <div class="sidebar-label">Akun</div>
-    <button class="sidebar-item" onclick="requireAuth('history')"><i class="fas fa-clock-rotate-left"></i> Riwayat</button>
-    <button class="sidebar-item" onclick="requireAuth('deposit')"><i class="fas fa-wallet"></i> Deposit</button>
-    <button class="sidebar-item" onclick="requireAuth('profil')"><i class="fas fa-user-circle"></i> Profil</button>
+    <button class="sidebar-item" onclick="goPage('riwayat.html')"><i class="fas fa-clock-rotate-left"></i> Riwayat</button>
+    <button class="sidebar-item" onclick="goPage('deposit.html')"><i class="fas fa-wallet"></i> Deposit</button>
+    <button class="sidebar-item" onclick="goPage('profil.html')"><i class="fas fa-user-circle"></i> Profil</button>
+    <!-- Role-based sidebar items, filled by JS -->
+    <div id="sidebarRoleItems"></div>
   </aside>
 
   <!-- ── MAIN CONTENT ── -->
@@ -486,14 +720,10 @@
       </div>
     </div>
 
-    <!-- Category Tabs -->
+    <!-- Category Tabs (dynamic, loaded from Supabase) -->
     <div class="cat-tabs" id="catTabs">
       <div class="cat-tab active" onclick="setCategory(null, null, this)">Semua</div>
-      <div class="cat-tab" onclick="setCategory('akun', null, this)">Akun</div>
-      <div class="cat-tab" onclick="setCategory('joki', null, this)">Joki</div>
-      <div class="cat-tab" onclick="setCategory('item', null, this)">Item</div>
-      <div class="cat-tab" onclick="setCategory('top-up', null, this)">Top Up</div>
-      <div class="cat-tab" onclick="setCategory('digital', null, this)">Digital</div>
+      <!-- Dynamic tabs injected by JS -->
     </div>
 
     <!-- Search Info -->
@@ -630,6 +860,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await checkSession();
   await loadProducts();
   await loadStats();
+  await loadCategories();   // ← dynamic categories from Supabase
   bindSearch();
 });
 
@@ -655,21 +886,138 @@ async function setUser(user) {
 }
 
 function updateNavUser() {
+  const guestEl = document.getElementById('navGuest');
+  const userEl  = document.getElementById('navUser');
+  const qnbEl   = document.getElementById('quickNavBar');
+
   if (!currentUser) {
-    document.getElementById('navGuest').style.display = 'flex';
-    document.getElementById('navUser').style.display  = 'none';
+    guestEl.style.display = 'flex';
+    userEl.style.display  = 'none';
+    if (qnbEl) qnbEl.style.display = 'none';
+    document.getElementById('sidebarRoleItems').innerHTML = '';
     return;
   }
-  document.getElementById('navGuest').style.display = 'none';
-  document.getElementById('navUser').style.display  = 'flex';
-  const nm = currentProfile?.username || currentUser.email.split('@')[0];
+
+  guestEl.style.display = 'none';
+  userEl.style.display  = 'flex';
+  if (qnbEl) qnbEl.style.display = 'flex';
+
+  const nm      = currentProfile?.username || currentUser.email.split('@')[0];
+  const email   = currentProfile?.email    || currentUser.email;
+  const role    = currentProfile?.role     || 'buyer';
+  const balance = currentProfile?.balance  || 0;
+  const CLD     = CLOUDINARY_BASE;
+  const avUrl   = currentProfile?.avatar_url;
+  const avHtml  = avUrl ? `<img src="${CLD}${avUrl}" alt="av"/>` : nm[0].toUpperCase();
+
+  // ── Navbar chip ──
   document.getElementById('navName').textContent = nm;
-  const av = document.getElementById('navAvatar');
-  if (currentProfile?.avatar_url) {
-    av.innerHTML = `<img src="${CLOUDINARY_BASE}${currentProfile.avatar_url}" alt="avatar" />`;
-  } else {
-    av.textContent = nm[0].toUpperCase();
+  const navAv = document.getElementById('navAvatar');
+  navAv.innerHTML = avHtml;
+
+  // Role badge on chip
+  const roleBadge = document.getElementById('navRoleBadge');
+  const roleMap   = { admin:'Admin', seller:'Seller', cs:'CS', buyer:'Buyer' };
+  const roleClass = { admin:'nrb-admin', seller:'nrb-seller', cs:'nrb-cs', buyer:'nrb-buyer' };
+  roleBadge.textContent  = roleMap[role] || role;
+  roleBadge.className    = `nav-role-badge ${roleClass[role] || 'nrb-buyer'}`;
+
+  // ── Dropdown ──
+  const ddAv = document.getElementById('ddAv');
+  ddAv.innerHTML = avHtml;
+  document.getElementById('ddName').textContent    = nm;
+  document.getElementById('ddEmail').textContent   = email;
+  document.getElementById('ddBalance').textContent = fmtBalance(balance);
+
+  // Role-based sections
+  const isSeller = role === 'seller' || role === 'admin';
+  const isCs     = role === 'cs'     || role === 'admin';
+  const isAdmin  = role === 'admin';
+
+  document.getElementById('ddSellerSection').style.display = isSeller ? 'block' : 'none';
+  document.getElementById('ddCsSection').style.display     = isCs     ? 'block' : 'none';
+  document.getElementById('ddAdminSection').style.display  = isAdmin  ? 'block' : 'none';
+
+  // Load pending counts async
+  if (isSeller) loadPendingOrders();
+  if (isAdmin)  loadPendingDeposits();
+
+  // ── Sidebar role items ──
+  let sideExtra = '';
+  if (isSeller) {
+    sideExtra += `
+      <div class="sidebar-sep"></div>
+      <div class="sidebar-label">Seller</div>
+      <button class="sidebar-item" onclick="goPage('seller-dashboard.html')"><i class="fas fa-store"></i> Dashboard Seller</button>
+      <button class="sidebar-item" onclick="goPage('seller-dashboard.html?tab=produk')"><i class="fas fa-boxes-stacked"></i> Produk Saya</button>
+      <button class="sidebar-item" onclick="goPage('seller-dashboard.html?tab=orders')"><i class="fas fa-inbox"></i> Pesanan Masuk</button>`;
   }
+  if (isCs) {
+    sideExtra += `
+      <div class="sidebar-sep"></div>
+      <div class="sidebar-label">CS</div>
+      <button class="sidebar-item" onclick="goPage('cs-dashboard.html')"><i class="fas fa-headset"></i> CS Dashboard</button>`;
+  }
+  if (isAdmin) {
+    sideExtra += `
+      <div class="sidebar-sep"></div>
+      <div class="sidebar-label">Admin</div>
+      <button class="sidebar-item" onclick="goPage('admin-panel.html')"><i class="fas fa-chart-pie"></i> Admin Panel</button>
+      <button class="sidebar-item" onclick="goPage('deposit-admin.html')"><i class="fas fa-qrcode"></i> Kelola Deposit</button>`;
+  }
+  document.getElementById('sidebarRoleItems').innerHTML = sideExtra;
+}
+
+async function loadPendingOrders() {
+  if (!currentUser) return;
+  const { count } = await sb.from('orders')
+    .select('*', { count:'exact', head:true })
+    .eq('seller_id', currentUser.id)
+    .eq('status', 'pending');
+  const el = document.getElementById('ddPendingOrders');
+  if (el && count > 0) { el.textContent = count; el.style.display = 'inline'; }
+}
+
+async function loadPendingDeposits() {
+  if (!currentUser) return;
+  const { count } = await sb.from('deposit_requests')
+    .select('*', { count:'exact', head:true })
+    .in('status', ['waiting_review','pending']);
+  const el = document.getElementById('ddPendingDeposit');
+  if (el && count > 0) { el.textContent = count; el.style.display = 'inline'; }
+}
+
+function fmtBalance(v) {
+  if (!v) return 'Rp 0';
+  return 'Rp ' + Number(v).toLocaleString('id-ID');
+}
+
+// ── Dropdown toggle ──
+function toggleDropdown() {
+  const chip = document.getElementById('navUserChip');
+  const dd   = document.getElementById('navDropdown');
+  const ch   = document.getElementById('navChevron');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  chip.classList.toggle('open', !isOpen);
+  ch.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  const chip = document.getElementById('navUserChip');
+  const dd   = document.getElementById('navDropdown');
+  if (dd && !chip?.contains(e.target)) {
+    dd.classList.remove('open');
+    chip?.classList.remove('open');
+    const ch = document.getElementById('navChevron');
+    if (ch) ch.style.transform = 'rotate(0deg)';
+  }
+});
+
+function goPage(url) {
+  if (!currentUser) { openAuth('login'); toast('Login dulu ya', 'error'); return; }
+  location.href = url;
 }
 
 async function doLogin() {
@@ -728,7 +1076,8 @@ async function logout() {
 
 function requireAuth(page) {
   if (!currentUser) { openAuth('login'); return toast('Login dulu ya', 'error'); }
-  toast(`Halaman ${page} segera hadir`, 'info');
+  const pages = { history:'riwayat.html', deposit:'deposit.html', profil:'profil.html' };
+  if (pages[page]) location.href = pages[page];
 }
 
 // ══════════════════════════════════════════
@@ -984,28 +1333,350 @@ document.addEventListener('keydown', e => {
 });
 
 // ══════════════════════════════════════════
-//  UTILS
+//  DYNAMIC CATEGORIES FROM SUPABASE
 // ══════════════════════════════════════════
-function formatPrice(p) {
-  if (!p && p !== 0) return 'Gratis';
-  if (p === 0) return 'Gratis';
-  return 'Rp ' + Number(p).toLocaleString('id-ID');
+// Category icon map (slug → icon class)
+const CAT_ICONS = {
+  'akun':    'fas fa-user-shield',
+  'joki':    'fas fa-gamepad',
+  'item':    'fas fa-gem',
+  'top-up':  'fas fa-coins',
+  'digital': 'fas fa-download',
+  'skin':    'fas fa-palette',
+  'boost':   'fas fa-rocket',
+  'voucher': 'fas fa-ticket',
+  'account': 'fas fa-user',
+};
+const CAT_COLORS = {
+  'akun':    '#4a7dff', 'joki': '#a855f7', 'item': '#06b6d4',
+  'top-up':  '#f59e0b', 'digital':'#22c55e','skin':'#e1306c',
+  'boost':   '#ef4444', 'voucher':'#f59e0b','account':'#4a7dff',
+};
+
+let allCategories = [];
+
+async function loadCategories() {
+  const { data } = await sb.from('categories').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+  allCategories = data || [];
+  renderCategoryTabs();
+  renderSidebarCategories();
+  renderCatSheet();
 }
-function renderStars(r) {
-  const full = Math.round(r);
-  return '★'.repeat(full) + '☆'.repeat(5 - full);
+
+function renderCategoryTabs() {
+  const tabs = document.getElementById('catTabs');
+  const existing = tabs.querySelector('.cat-tab.active');
+  // Keep "Semua" tab, rebuild rest
+  tabs.innerHTML = `<div class="cat-tab active" onclick="setCategory(null, null, this)">Semua</div>`;
+  allCategories.forEach(cat => {
+    const div = document.createElement('div');
+    div.className = 'cat-tab';
+    div.innerHTML = `${cat.icon ? `<i class="${cat.icon}" style="margin-right:5px"></i>` : ''}${esc(cat.name)}`;
+    div.onclick = function() { setCategory(cat.slug, null, this); };
+    tabs.appendChild(div);
+  });
 }
-function esc(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderSidebarCategories() {
+  const container = document.getElementById('sidebarCategories');
+  if (!container) return;
+  container.innerHTML = allCategories.map(cat => {
+    const icon  = cat.icon || CAT_ICONS[cat.slug] || 'fas fa-tag';
+    return `<button class="sidebar-item" onclick="setCategory('${cat.slug}', this)">
+      <i class="${icon}"></i> ${esc(cat.name)}
+    </button>`;
+  }).join('');
 }
+
+function renderCatSheet() {
+  const list = document.getElementById('catSheetList');
+  if (!list) return;
+  list.innerHTML = allCategories.map(cat => {
+    const icon  = cat.icon || CAT_ICONS[cat.slug] || 'fas fa-tag';
+    const color = cat.color || CAT_COLORS[cat.slug] || 'var(--accent)';
+    return `<div class="bsi" onclick="selectCatSheet('${cat.slug}')">
+      <div class="bsi-icon" style="background:${color}22; color:${color}">
+        <i class="${icon}"></i>
+      </div>
+      <div class="bsi-text">
+        <div class="bsi-title">${esc(cat.name)}</div>
+        ${cat.description ? `<div class="bsi-sub">${esc(cat.description)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectCatSheet(slug) {
+  closeCatSheet();
+  activeCategory = slug;
+  searchQuery    = '';
+  document.getElementById('navSearch').value = '';
+  document.getElementById('searchBar').style.display = 'none';
+  // Update tabs
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  if (!slug) document.querySelector('.cat-tab').classList.add('active');
+  // Update section header
+  if (slug) {
+    const cat = allCategories.find(c => c.slug === slug);
+    document.getElementById('secTitle').textContent = cat ? cat.name : slug;
+    document.getElementById('secSub').textContent   = cat?.description || 'Kategori ' + slug;
+  } else {
+    document.getElementById('secTitle').textContent = 'Produk Terbaru';
+    document.getElementById('secSub').textContent   = 'Semua kategori';
+  }
+  showSkeletons();
+  loadProducts();
+  // Update sidebar
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('sideAllBtn')?.classList.toggle('active', !slug);
+}
+
+// ══════════════════════════════════════════
+//  BOTTOM NAV
+// ══════════════════════════════════════════
+function bnGo(tab) {
+  document.querySelectorAll('.bn-item').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(`bn-${tab}`);
+  if (el) el.classList.add('active');
+
+  if (tab === 'home') {
+    closeCatSheet(); closeProfilSheet();
+    setCategory(null, null, document.querySelector('.cat-tab'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  if (tab === 'kategori') {
+    closeProfilSheet();
+    openCatSheet();
+  }
+  if (tab === 'profil') {
+    closeCatSheet();
+    if (!currentUser) { openAuth('login'); return; }
+    openProfilSheet();
+  }
+  if (tab === 'riwayat') {
+    goPage('riwayat.html');
+  }
+}
+
+// ── Category Sheet ──
+function openCatSheet() {
+  const sheet = document.getElementById('catSheet');
+  sheet.style.display = 'block';
+  // re-animate
+  const inner = document.getElementById('catSheetInner');
+  inner.style.animation = 'none';
+  requestAnimationFrame(() => { inner.style.animation = 'sheetUp .3s cubic-bezier(.32,1.25,.55,1)'; });
+}
+function closeCatSheet() {
+  document.getElementById('catSheet').style.display = 'none';
+  // reset bottom nav
+  const bn = document.getElementById('bn-kategori');
+  if (bn) bn.classList.remove('active');
+  // restore home active if no category active
+  if (!activeCategory) {
+    document.getElementById('bn-home')?.classList.add('active');
+  }
+}
+
+// ── Profil Sheet ──
+function openProfilSheet() {
+  if (!currentUser) { openAuth('login'); return; }
+  buildProfilSheet();
+  const sheet = document.getElementById('profilSheet');
+  sheet.style.display = 'block';
+  const inner = document.getElementById('profilSheetInner');
+  inner.style.animation = 'none';
+  requestAnimationFrame(() => { inner.style.animation = 'sheetUp .3s cubic-bezier(.32,1.25,.55,1)'; });
+}
+function closeProfilSheet() {
+  document.getElementById('profilSheet').style.display = 'none';
+  document.getElementById('bn-profil')?.classList.remove('active');
+  if (!activeCategory) document.getElementById('bn-home')?.classList.add('active');
+}
+
+function buildProfilSheet() {
+  const nm      = currentProfile?.username || currentUser.email.split('@')[0];
+  const email   = currentProfile?.email    || currentUser.email;
+  const balance = currentProfile?.balance  || 0;
+  const role    = currentProfile?.role     || 'buyer';
+  const avUrl   = currentProfile?.avatar_url;
+  const avHtml  = avUrl ? `<img src="${CLOUDINARY_BASE}${avUrl}" alt="av"/>` : nm[0].toUpperCase();
+
+  const roleColors = { admin:'var(--danger)', seller:'var(--warn)', cs:'#06b6d4', buyer:'var(--accent)' };
+  const roleLabels = { admin:'Administrator', seller:'Verified Seller', cs:'Customer Service', buyer:'Member' };
+
+  const isSeller = role === 'seller' || role === 'admin';
+  const isCs     = role === 'cs'     || role === 'admin';
+  const isAdmin  = role === 'admin';
+
+  let roleItems = '';
+  if (isSeller) roleItems += `
+    <div class="sheet-sep"></div>
+    <div style="padding:6px 20px 4px; font-size:10px; font-weight:600; color:var(--txt2); text-transform:uppercase; letter-spacing:.07em">Seller</div>
+    <a class="bsi" href="seller-dashboard.html">
+      <div class="bsi-icon" style="background:rgba(245,158,11,.15);color:var(--warn)"><i class="fas fa-store"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Seller Dashboard</div><div class="bsi-sub">Kelola produk & pesanan</div></div>
+    </a>`;
+  if (isCs) roleItems += `
+    <a class="bsi" href="cs-dashboard.html">
+      <div class="bsi-icon" style="background:rgba(6,182,212,.15);color:#06b6d4"><i class="fas fa-headset"></i></div>
+      <div class="bsi-text"><div class="bsi-title">CS Dashboard</div><div class="bsi-sub">Customer service panel</div></div>
+    </a>`;
+  if (isAdmin) roleItems += `
+    <div class="sheet-sep"></div>
+    <div style="padding:6px 20px 4px; font-size:10px; font-weight:600; color:var(--txt2); text-transform:uppercase; letter-spacing:.07em">Admin</div>
+    <a class="bsi" href="admin-panel.html">
+      <div class="bsi-icon" style="background:rgba(239,68,68,.12);color:var(--danger)"><i class="fas fa-chart-pie"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Admin Panel</div><div class="bsi-sub">Kelola platform</div></div>
+    </a>
+    <a class="bsi" href="deposit-admin.html">
+      <div class="bsi-icon" style="background:rgba(245,158,11,.12);color:var(--warn)"><i class="fas fa-qrcode"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Kelola Deposit</div><div class="bsi-sub">ACC / tolak deposit QRIS</div></div>
+    </a>`;
+
+  document.getElementById('profilSheetContent').innerHTML = `
+    <!-- User header -->
+    <div class="sheet-header-user">
+      <div class="shu-av">${avHtml}</div>
+      <div class="shu-info">
+        <div class="shu-name">${esc(nm)}</div>
+        <div class="shu-email">${esc(email)}</div>
+        <div style="margin-top:4px">
+          <span style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; background:${roleColors[role]}22; color:${roleColors[role]}">${roleLabels[role]||role}</span>
+        </div>
+      </div>
+      <div class="shu-balance">
+        <div class="sb-l">Saldo</div>
+        <div class="sb-v">${formatPrice(balance)}</div>
+      </div>
+    </div>
+
+    <!-- Menu items -->
+    <a class="bsi" href="profil.html">
+      <div class="bsi-icon" style="background:rgba(74,125,255,.15);color:var(--accent)"><i class="fas fa-user-circle"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Profil Saya</div><div class="bsi-sub">Edit info & foto profil</div></div>
+    </a>
+    <a class="bsi" href="riwayat.html">
+      <div class="bsi-icon" style="background:rgba(168,85,247,.15);color:#a855f7"><i class="fas fa-receipt"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Riwayat Transaksi</div><div class="bsi-sub">Order & pembelian</div></div>
+    </a>
+    <a class="bsi" href="deposit.html">
+      <div class="bsi-icon" style="background:rgba(34,197,94,.15);color:var(--success)"><i class="fas fa-wallet"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Deposit Saldo</div><div class="bsi-sub">Top up via QRIS</div></div>
+    </a>
+
+    ${roleItems}
+
+    <div class="sheet-sep"></div>
+    <button class="bsi danger" onclick="logout(); closeProfilSheet()">
+      <div class="bsi-icon"><i class="fas fa-sign-out-alt"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Keluar</div></div>
+    </button>
+  `;
+}
+
+// Update bottom nav active on scroll (home reset)
+window.addEventListener('scroll', () => {
+  if (window.scrollY < 60 && !activeCategory && !searchQuery) {
+    document.querySelectorAll('.bn-item').forEach(b => b.classList.remove('active'));
+    document.getElementById('bn-home')?.classList.add('active');
+  }
+});
+
+// ══════════════════════════════════════════
+//  TOAST (fix: use #tc instead of #toast-container)
+// ══════════════════════════════════════════
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
+  const tc = document.getElementById('toast-container') || document.getElementById('tc');
+  if (tc) tc.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
+
+// Init categories on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // loadCategories called after DOMContentLoaded — but sb is defined before
+  // so we hook into the existing init flow
+}, { once: false });
+
+// Hook: also load categories when products load
+const _origInit = window.addEventListener;
 </script>
+
+<!-- ══ BOTTOM NAV (≤900px) ══ -->
+<nav id="bottomNav" aria-label="Navigasi Bawah">
+  <div class="bn-inner">
+    <button class="bn-item active" id="bn-home" onclick="bnGo('home')" aria-label="Beranda">
+      <i class="fas fa-home"></i><span>Beranda</span>
+    </button>
+    <button class="bn-item" id="bn-kategori" onclick="bnGo('kategori')" aria-label="Kategori">
+      <i class="fas fa-grip"></i><span>Kategori</span>
+    </button>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:4px">
+      <button class="bn-fab" onclick="goPage('deposit.html')" aria-label="Deposit">
+        <i class="fas fa-wallet"></i>
+      </button>
+      <span style="font-size:10px;font-weight:600;color:var(--txt2);margin-top:-4px">Deposit</span>
+    </div>
+    <button class="bn-item" id="bn-riwayat" onclick="goPage('riwayat.html')" aria-label="Riwayat">
+      <i class="fas fa-receipt"></i><span>Riwayat</span>
+    </button>
+    <button class="bn-item" id="bn-profil" onclick="bnGo('profil')" aria-label="Profil">
+      <i class="fas fa-user-circle"></i><span>Profil</span>
+    </button>
+  </div>
+</nav>
+
+<!-- CATEGORY BOTTOM SHEET -->
+<div id="catSheet" style="position:fixed;inset:0;z-index:400;display:none;background:rgba(0,0,0,.65);backdrop-filter:blur(4px)" onclick="closeCatSheet()">
+  <div id="catSheetInner" style="position:absolute;bottom:0;left:0;right:0;background:var(--nav);border-top:1px solid var(--border);border-radius:20px 20px 0 0;max-height:80vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,0)" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:center;padding:12px 0 0"><div style="width:36px;height:4px;border-radius:2px;background:var(--border)"></div></div>
+    <div style="padding:14px 18px;font-size:15px;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      Pilih Kategori
+      <button onclick="closeCatSheet()" style="background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="sheetAllCat" class="bsi" onclick="selectCatSheet(null)">
+      <div class="bsi-icon" style="background:rgba(74,125,255,.15);color:var(--accent)"><i class="fas fa-home"></i></div>
+      <div class="bsi-text"><div class="bsi-title">Semua Produk</div><div class="bsi-sub">Tampilkan semua kategori</div></div>
+    </div>
+    <div id="catSheetList" style="padding-bottom:16px"></div>
+  </div>
+</div>
+
+<!-- PROFIL BOTTOM SHEET -->
+<div id="profilSheet" style="position:fixed;inset:0;z-index:400;display:none;background:rgba(0,0,0,.65);backdrop-filter:blur(4px)" onclick="closeProfilSheet()">
+  <div id="profilSheetInner" style="position:absolute;bottom:0;left:0;right:0;background:var(--nav);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0)" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:center;padding:12px 0 0"><div style="width:36px;height:4px;border-radius:2px;background:var(--border)"></div></div>
+    <div id="profilSheetContent" style="padding-bottom:8px"></div>
+  </div>
+</div>
+
+<style>
+@keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+#catSheetInner, #profilSheetInner { animation: sheetUp .3s cubic-bezier(.32,1.25,.55,1); }
+.bsi { display:flex;align-items:center;gap:14px;padding:13px 20px;cursor:pointer;transition:background .15s;text-decoration:none;color:var(--txt);border:none;background:none;width:100%;text-align:left;font-family:'Poppins',sans-serif;font-size:14px; }
+.bsi:hover,.bsi:active { background:var(--surface); }
+.bsi-icon { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0; }
+.bsi-text .bsi-title { font-size:14px;font-weight:600; }
+.bsi-text .bsi-sub   { font-size:12px;color:var(--txt2);margin-top:2px; }
+.bsi.danger .bsi-title { color:var(--danger); }
+.bsi.danger .bsi-icon  { background:rgba(239,68,68,.12);color:var(--danger); }
+.sheet-sep { height:1px;background:var(--border);margin:4px 0; }
+.sheet-header-user { display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border); }
+.shu-av { width:50px;height:50px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0; }
+.shu-av img { width:100%;height:100%;object-fit:cover; }
+.shu-info .shu-name  { font-size:15px;font-weight:700; }
+.shu-info .shu-email { font-size:12px;color:var(--txt2);margin-top:2px; }
+.shu-balance { margin-left:auto;text-align:right; }
+.shu-balance .sb-l { font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em; }
+.shu-balance .sb-v { font-size:16px;font-weight:800;color:var(--success);font-family:'Syne',sans-serif; }
+</style>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
 </body>
 </html>
+
